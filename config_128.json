@@ -1,0 +1,49 @@
+{   
+    "diffusion_config":{
+        "T": 200,
+        "beta_0": 0.0001,
+        "beta_T": 0.02
+    },
+    "wavenet_config": {
+        "in_channels": 1, 
+        "res_channels": 128, 
+        "skip_channels": 128, 
+        "out_channels": 1, 
+        "num_res_layers": 30, 
+        "dilation_cycle": 10,
+        "diffusion_step_embed_dim_in": 128,
+        "diffusion_step_embed_dim_mid": 512,
+        "diffusion_step_embed_dim_out": 512
+    },
+    "train_config": {
+        "output_directory": "logs/checkpoint",
+        "tensorboard_directory": "logs/tensorboard",
+        "ckpt_iter": "max",
+        "iters_per_ckpt": 10000,
+        "iters_per_logging": 100,
+        "n_iters": 1000001,
+        "learning_rate": 2e-4,
+        "batch_size_per_gpu": 2
+    },
+    "trainset_config": {
+        "segment_length": 16000,
+        "data_path": "/tmp2/LJSpeech-1.1/train",
+        "valid": false,
+        "sampling_rate": 22050,
+        "filter_length": 1024,
+        "hop_length": 256,
+        "win_length": 1024,
+        "mel_fmin": 0.0,
+        "mel_fmax": 8000.0
+    },
+    "gen_config":{
+        "tensorboard_directory": "logs/tensorboard",
+        "mel_path": "./mel_spectrogram",
+        "output_directory": "speeches",
+        "ckpt_path": "logs/checkpoint"
+    },
+    "dist_config": {
+        "dist_backend": "nccl",
+        "dist_url": "tcp://localhost:54321"
+    }
+}
