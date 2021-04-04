@@ -31,11 +31,9 @@ def generate(output_directory, tensorboard_directory,
     """
 
     # generate experiment (local) path
-    local_path = "ch{}_dilcycle{}_nlayers{}_T{}_betaT{}".format(wavenet_config["res_channels"], 
-                                                                wavenet_config["dilation_cycle"],
-                                                                wavenet_config["num_res_layers"],
-                                                                diffusion_config["T"], 
-                                                                diffusion_config["beta_T"])
+    local_path = "ch{}_T{}_betaT{}".format(wavenet_config["res_channels"], 
+                                           diffusion_config["T"], 
+                                           diffusion_config["beta_T"])
 
     # Get shared output_directory ready
     output_directory = os.path.join('exp', local_path, output_directory)
