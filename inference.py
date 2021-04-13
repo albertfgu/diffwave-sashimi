@@ -77,11 +77,9 @@ def generate(output_directory, tensorboard_directory,
     end = torch.cuda.Event(enable_timing=True)
     start.record()
 
-    # inference
     generated_audio = sampling(net, (1,1,audio_length), 
                             diffusion_hyperparams, 
-                            condition=ground_truth_mel_spectrogram,
-                            print_every_n_steps=diffusion_config["T"] // 5)
+                            condition=ground_truth_mel_spectrogram)
 
     end.record()
     torch.cuda.synchronize()

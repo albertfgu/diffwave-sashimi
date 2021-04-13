@@ -123,7 +123,7 @@ def calc_diffusion_hyperparams(T, beta_0, beta_T):
     return diffusion_hyperparams
 
 
-def sampling(net, size, diffusion_hyperparams, condition=None, print_every_n_steps=100):
+def sampling(net, size, diffusion_hyperparams, condition=None):
     """
     Perform the complete sampling step according to p(x_0|x_T) = \prod_{t=1}^T p_{\theta}(x_{t-1}|x_t)
 
@@ -134,8 +134,7 @@ def sampling(net, size, diffusion_hyperparams, condition=None, print_every_n_ste
     diffusion_hyperparams (dict):   dictionary of diffusion hyperparameters returned by calc_diffusion_hyperparams
                                     note, the tensors need to be cuda tensors
     condition (torch.tensor):       ground truth mel spectrogram read from disk
-                                    None if used for unconditional generation
-    print_every_n_steps (int):      print status every this number of reverse steps          
+                                    None if used for unconditional generation        
     
     Returns:
     the generated audio(s) in torch.tensor, shape=size
