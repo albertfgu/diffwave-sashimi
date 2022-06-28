@@ -1,0 +1,54 @@
+{
+    "diffusion_config":{
+        "T": 50,
+        "beta_0": 0.0001,
+        "beta_T": 0.05
+    },
+    "model_config": {
+        "in_channels": 1,
+        "res_channels": 64,
+        "skip_channels": 64,
+        "out_channels": 1,
+        "num_res_layers": 30,
+        "dilation_cycle": 10,
+        "diffusion_step_embed_dim_in": 128,
+        "diffusion_step_embed_dim_mid": 512,
+        "diffusion_step_embed_dim_out": 512,
+        "unconditional": false,
+        "mel_upsample": [32, 64],
+        "unet": true,
+        "d_model": 32,
+        "n_layers": 6,
+        "pool": [4, 4],
+        "expand": 2,
+        "ff": 2,
+        "channels": 1,
+        "L": 44000,
+        "sashimi": false
+    },
+    "train_config": {
+        "ckpt_iter": "max",
+        "iters_per_ckpt": 1000,
+        "iters_per_logging": 100,
+        "n_iters": 1000001,
+        "learning_rate": 2e-4,
+        "batch_size_per_gpu": 2,
+        "wandb_mode": "online",
+        "n_samples": 2
+    },
+    "dataset_config": {
+        "data_path": "../data/ljspeech/LJSpeech-1.1/wavs",
+        "segment_length": 44000,
+        "sampling_rate": 22050,
+        "valid": false,
+        "filter_length": 1024,
+        "win_length": 1024,
+        "hop_length": 2048,
+        "mel_fmin": 0.0,
+        "mel_fmax": 8000.0
+    },
+    "dist_config": {
+        "dist_backend": "nccl",
+        "dist_url": "tcp://localhost:54321"
+    }
+}

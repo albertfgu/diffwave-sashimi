@@ -32,10 +32,11 @@ import torch
 import torch.utils.data
 import sys
 from scipy.io.wavfile import read
+from tqdm import tqdm
 
 # We're using the audio processing from TacoTron2 to make sure it matches
-sys.path.insert(0, 'tacotron2')
-from tacotron2.layers import TacotronSTFT
+# sys.path.insert(0, 'tacotron2')
+from stft import TacotronSTFT
 
 MAX_WAV_VALUE = 32768.0
 
@@ -103,6 +104,7 @@ class Mel2Samp(torch.utils.data.Dataset):
 
         mel = self.get_mel(audio)
         audio = audio / MAX_WAV_VALUE
+        audio = audio.unsqueeze(0) # (1, length)
 
         return (mel, audio)
 
@@ -125,17 +127,19 @@ if __name__ == "__main__":
 
     with open(args.config) as f:
         data = f.read()
-    data_config = json.loads(data)["validset_config"]
+    # data_config = json.loads(data)["validset_config"]
+    data_config = json.loads(data)["dataset_config"]
     mel2samp = Mel2Samp(**data_config)
 
     filepaths = files_to_list(args.filelist_path)
+    filepaths = sorted(filepaths)
 
     # Make directory if it doesn't exist
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
         os.chmod(args.output_dir, 0o775)
 
-    for filepath in filepaths:
+    for filepath in tqdm(filepaths):
         audio, sr = load_wav_to_torch(filepath)
         melspectrogram = mel2samp.get_mel(audio)
         filename = os.path.basename(filepath)

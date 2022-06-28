@@ -42,7 +42,7 @@ import torch
 from distributed_util import *
 
 
-def main(config, stdout_dir, args_str):
+def main(config, stdout_dir, args_str, wandb_id, mel_path):
     args_list = ['train.py']
     args_list += args_str.split(' ') if len(args_str) > 0 else []
 
@@ -51,6 +51,8 @@ def main(config, stdout_dir, args_str):
     num_gpus = torch.cuda.device_count()
     args_list.append('--num_gpus={}'.format(num_gpus))
     args_list.append("--group_name=group_{}".format(time.strftime("%Y_%m_%d-%H%M%S")))
+    args_list.append(f'--wandb_id={wandb_id}')
+    args_list.append(f'--mel_path={mel_path}')
 
     if not os.path.isdir(stdout_dir):
         os.makedirs(stdout_dir)
@@ -59,7 +61,7 @@ def main(config, stdout_dir, args_str):
     workers = []
 
     for i in range(num_gpus):
-        args_list[-2] = '--rank={}'.format(i)
+        args_list[2] = '--rank={}'.format(i) # Overwrite num_gpus
         stdout = None if i == 0 else open(
             os.path.join(stdout_dir, "GPU_{}.log".format(i)), "w")
         print(args_list)
@@ -78,6 +80,8 @@ if __name__ == '__main__':
                         help='directory to save stoud logs')
     parser.add_argument('-a', '--args_str', type=str, default='',
                         help='double quoted string with space separated key value pairs')
+    parser.add_argument('-w', '--wandb_id', type=str, default='')
+    parser.add_argument('-m', '--mel_path', type=str, default='')
 
     args = parser.parse_args()
-    main(args.config, args.stdout_dir, args.args_str)
+    main(args.config, args.stdout_dir, args.args_str, args.wandb_id, args.mel_path)
