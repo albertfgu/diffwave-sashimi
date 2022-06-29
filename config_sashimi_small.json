@@ -31,7 +31,7 @@
         "n_iters": 1000001,
         "learning_rate": 2e-4,
         "batch_size_per_gpu": 4,
-        "wandb_mode": "online",
+        "wandb_mode": "disabled",
         "n_samples": 32
     },
     "dataset_config":{

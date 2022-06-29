@@ -219,45 +219,45 @@ def train(rank, num_gpus, group_name, wandb_id,
         wandb.finish()
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, default='config.json',
-                        help='JSON file for configuration')
-    parser.add_argument('-r', '--rank', type=int, default=0,
-                        help='rank of process for distributed')
-    parser.add_argument('-g', '--group_name', type=str, default='',
-                        help='name of group for distributed')
-    parser.add_argument('-w', '--wandb_id', type=str, default='')
-    parser.add_argument('-m', '--mel_path', type=str, default='')
-    parser.add_argument('-n', '--name', type=str, default='')
-    args = parser.parse_args()
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('-c', '--config', type=str, default='config.json',
+#                         help='JSON file for configuration')
+#     parser.add_argument('-r', '--rank', type=int, default=0,
+#                         help='rank of process for distributed')
+#     parser.add_argument('-g', '--group_name', type=str, default='',
+#                         help='name of group for distributed')
+#     parser.add_argument('-w', '--wandb_id', type=str, default='')
+#     parser.add_argument('-m', '--mel_path', type=str, default='')
+#     parser.add_argument('-n', '--name', type=str, default='')
+#     args = parser.parse_args()
 
-    # Parse configs. Globals nicer in this case
-    with open(args.config) as f:
-        data = f.read()
-    config = json.loads(data)
-    train_config            = config["train_config"]        # training parameters
-    # global dist_config
-    dist_config             = config["dist_config"]         # to initialize distributed training
-    # global model_config
-    model_config          = config["model_config"]      # to define wavenet
-    # global diffusion_config
-    diffusion_config        = config["diffusion_config"]    # basic hyperparameters
-    # global dataset_config
-    dataset_config         = config["dataset_config"]     # to load trainset
-    # global diffusion_hyperparams
-    # diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
+#     # Parse configs. Globals nicer in this case
+#     with open(args.config) as f:
+#         data = f.read()
+#     config = json.loads(data)
+#     train_config            = config["train_config"]        # training parameters
+#     # global dist_config
+#     dist_config             = config["dist_config"]         # to initialize distributed training
+#     # global model_config
+#     model_config          = config["model_config"]      # to define wavenet
+#     # global diffusion_config
+#     diffusion_config        = config["diffusion_config"]    # basic hyperparameters
+#     # global dataset_config
+#     dataset_config         = config["dataset_config"]     # to load trainset
+#     # global diffusion_hyperparams
+#     # diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
 
-    num_gpus = torch.cuda.device_count()
-    if num_gpus > 1:
-        if args.group_name == '':
-            print("WARNING: Multiple GPUs detected but no distributed group set")
-            print("Only running 1 GPU. Use distributed.py for multiple GPUs")
-            num_gpus = 1
+#     num_gpus = torch.cuda.device_count()
+#     if num_gpus > 1:
+#         if args.group_name == '':
+#             print("WARNING: Multiple GPUs detected but no distributed group set")
+#             print("Only running 1 GPU. Use distributed.py for multiple GPUs")
+#             num_gpus = 1
 
-    if num_gpus == 1 and args.rank != 0:
-        raise Exception("Doing single GPU training on rank > 0")
+#     if num_gpus == 1 and args.rank != 0:
+#         raise Exception("Doing single GPU training on rank > 0")
 
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = True
-    train(args.rank, num_gpus, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, dist_config, name=args.name, mel_path=args.mel_path, **train_config)
+#     torch.backends.cudnn.enabled = True
+#     torch.backends.cudnn.benchmark = True
+#     train(args.rank, num_gpus, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, dist_config, name=args.name, mel_path=args.mel_path, **train_config)

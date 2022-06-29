@@ -19,6 +19,7 @@ from model import construct_model
 @torch.no_grad()
 def generate(
         # output_directory, # tensorboard_directory,
+        rank,
         num_samples,
         # ckpt_path,
         ckpt_iter,
@@ -28,7 +29,6 @@ def generate(
         dataset_config,
         batch_size=0,
         ckpt_smooth=-1,
-        rank=0,
         mel_path=None, mel_name="LJ001-0001",
     ):
     """
@@ -36,11 +36,9 @@ def generate(
 
     Parameters:
     output_directory (str):         checkpoint path
-    tensorboard_directory (str):    save tensorboard events to this path
     num_samples (int):              number of samples to generate, default is 4
-    ckpt_path (str):                checkpoint path
     ckpt_iter (int or 'max'):       the pretrained checkpoint to be loaded;
-                                    automitically selects the maximum iteration if 'max' is selected
+                                    automatically selects the maximum iteration if 'max' is selected
     """
 
     if rank is not None:

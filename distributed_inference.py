@@ -35,14 +35,18 @@ import time
 import subprocess
 import argparse
 import warnings
+import json
+from functools import partial
+import multiprocessing as mp
 warnings.filterwarnings("ignore")
 
 import torch
+from inference import generate
 
 from distributed_util import *
 
 
-def main(config, ckpt_iter, ckpt_smooth, num_samples, batch_size):
+def main(config, ckpt_iter, ckpt_smooth, num_samples, batch_size, name, model_config, diffusion_config, dataset_config):
     num_gpus = torch.cuda.device_count()
     # args_list = ["CUDA_VISIBLE_DEVICES", str(sys.executable), 'inference.py']
     args_list = [str(sys.executable), 'inference.py']
@@ -75,8 +79,29 @@ def main(config, ckpt_iter, ckpt_smooth, num_samples, batch_size):
         # p = subprocess.Popen([str(sys.executable)]+args_list)
         workers.append(p)
 
-    for p in workers:
-        p.wait()
+    # for p in workers:
+    #     p.wait()
+
+    # generate_fn = partial(
+    #     generate,
+    #     num_samples=num_samples//num_gpus,
+    #     ckpt_iter=ckpt_iter,
+    #     name=name,
+    #     diffusion_config=diffusion_config,
+    #     model_config=model_config,
+    #     dataset_config=dataset_config,
+    #     batch_size=batch_size,
+    #     ckpt_smooth=ckpt_smooth,
+    # )
+
+    # mp.set_start_method("spawn")
+    # processes = []
+    # for i in range(num_gpus):
+    #     p = mp.Process(target=generate_fn, args=(i,))
+    #     p.start()
+    #     processes.append(p)
+    # for p in processes:
+    #     p.join()
 
 
 if __name__ == '__main__':
@@ -91,6 +116,17 @@ if __name__ == '__main__':
                         help='Number of utterances to be generated')        
     parser.add_argument('-b', '--batch_size', type=int, default=0,
                         help='Number of samples to generate at once per GPU')        
+    parser.add_argument('--name', type=str, default='',
+                        help='Name of experiment (prefix of experiment directory)')
 
     args = parser.parse_args()
-    main(args.config, args.ckpt_iter, args.ckpt_smooth, args.num_samples, args.batch_size)
+
+    # Parse configs
+    with open(args.config) as f:
+        data = f.read()
+    config = json.loads(data)
+    model_config          = config["model_config"]      # to define wavenet
+    diffusion_config        = config["diffusion_config"]    # basic hyperparameters
+    dataset_config         = config["dataset_config"]     # to read trainset configurations
+
+    main(args.config, args.ckpt_iter, args.ckpt_smooth, args.num_samples, args.batch_size, args.name, model_config, diffusion_config, dataset_config)
