@@ -1,5 +1,8 @@
-This is a fork of philsyn/diffwave, a reimplementation of the unconditional waveform synthesizer in [DIFFWAVE: A VERSATILE DIFFUSION MODEL FOR AUDIO SYNTHESIS](https://arxiv.org/pdf/2009.09761.pdf).
+This is a fork of https://github.com/philsyn/DiffWave-unconditional and https://github.com/philsyn/DiffWave-Vocoder, a reimplementation of the waveform synthesizer in [DIFFWAVE: A VERSATILE DIFFUSION MODEL FOR AUDIO SYNTHESIS](https://arxiv.org/pdf/2009.09761.pdf).
 This repository contains code to reproduce the SaShiMi+DiffWave experiments from [It’s Raw! Audio Generation with State-Space Models](https://arxiv.org/abs/2202.09729) (Goel et al. 2022).
+
+This repo uses Git LFS to store model checkpoints, which unfortunately [does not work with public forks](https://github.com/git-lfs/git-lfs/issues/1939).
+For this reason it is not an official GitHub fork.
 
 ## Overview
 
