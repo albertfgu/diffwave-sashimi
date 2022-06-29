@@ -1,26 +1,31 @@
 import os
-import argparse
 import json
+import sys
+import time
+import subprocess
+import warnings
+warnings.filterwarnings("ignore")
+
+from functools import partial
+import multiprocessing as mp
 
 import numpy as np
 import torch
 import torch.nn as nn
+import hydra
+import wandb
+from omegaconf import DictConfig, OmegaConf
 # from torch.utils.tensorboard import SummaryWriter # If tensorboard is preferred over wandb
 
 from scipy.io.wavfile import write as wavwrite
-from scipy.io.wavfile import read as wavread
+# from scipy.io.wavfile import read as wavread
 
-from util import rescale, find_max_epoch, print_size, sampling, calc_diffusion_hyperparams
-from util import local_directory
-from util import smooth_ckpt
-# from WaveNet import WaveNet_Speech_Commands as WaveNet
 from model import construct_model
+from util import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams, local_directory, smooth_ckpt
 
 @torch.no_grad()
 def generate(
-        # output_directory, # tensorboard_directory,
         rank,
-        # n_samples,
         n_samples, # Samples per GPU
         ckpt_iter,
         name,
@@ -49,12 +54,8 @@ def generate(
 
     # map diffusion hyperparameters to gpu
     diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config, fast=True)  # dictionary of all diffusion hyperparameters
-    # for key in diffusion_hyperparams:
-    #     if key != "T":
-    #         diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda()
 
     # predefine model
-    # net = WaveNet(**model_config).cuda()
     net = construct_model(model_config).cuda()
     print_size(net)
     net.eval()
@@ -80,7 +81,6 @@ def generate(
 
     # Add checkpoint number to output directory
     output_directory = os.path.join(output_directory, str(ckpt_iter))
-    # if rank is None: rank = 0
     if rank == 0:
         if not os.path.isdir(output_directory):
             os.makedirs(output_directory)
@@ -137,13 +137,7 @@ def generate(
 
     # save audio to .wav
     for i in range(n_samples):
-        outfile = '{}k_{}.wav'.format(
-        # outfile = '{}_{}_{}k_{}.wav'.format(
-            # model_config["res_channels"],
-            # diffusion_config["T"],
-            ckpt_iter // 1000,
-            n_samples*rank + i,
-        )
+        outfile = '{}k_{}.wav'.format(ckpt_iter // 1000, n_samples*rank + i)
         wavwrite(os.path.join(output_directory, outfile),
                     dataset_config["sampling_rate"],
                     generated_audio[i].squeeze().cpu().numpy())
@@ -157,52 +151,32 @@ def generate(
     return generated_audio
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, default='config.json',
-                        help='JSON file for configuration')
-    parser.add_argument('--name', type=str, default='',
-                        help='Name of experiment (prefix of experiment directory)')
-    parser.add_argument('-ckpt_iter', '--ckpt_iter', default='max',
-                        help='Which checkpoint to use; assign a number or "max"')
-    parser.add_argument('-s', '--ckpt_smooth', default=-1, type=int,
-                        help='Which checkpoint to start averaging from')
-    parser.add_argument('-n', '--n_samples', type=int, default=4,
-                        help='Number of utterances to be generated')
-    parser.add_argument('-b', '--batch_size', type=int, default=0,
-                        help='Number of samples to generate at once per GPU')
-    parser.add_argument('-r', '--rank', type=int, default=0,
-                        help='rank of process for distributed')
-    args = parser.parse_args()
+@hydra.main(version_base=None, config_path="", config_name="config")
+def main(cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg))
+    OmegaConf.set_struct(cfg, False)  # Allow writing keys
 
-    # Parse configs. Globals nicer in this case
-    with open(args.config) as f:
-        data = f.read()
-    config = json.loads(data)
-    # gen_config              = config["gen_config"]
-    # global model_config
-    model_config          = config["model_config"]      # to define wavenet
-    # global diffusion_config
-    diffusion_config        = config["diffusion_config"]    # basic hyperparameters
-    # global dataset_config
-    dataset_config         = config["dataset_config"]     # to read trainset configurations
-    # global diffusion_hyperparams
-    # global train_config
-    # train_config            = config["train_config"]
-
-
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = True
-    generate(
-        # **gen_config,
-        # output_directory=train_config["output_directory"],
-        ckpt_iter=args.ckpt_iter,
-        ckpt_smooth=args.ckpt_smooth,
-        n_samples=args.n_samples,
-        batch_size=args.batch_size,
-        name=args.name,
-        diffusion_config=diffusion_config,
-        model_config=model_config,
-        dataset_config=dataset_config,
-        rank=args.rank,
+    num_gpus = torch.cuda.device_count()
+    generate_fn = partial(
+        generate,
+        diffusion_config=cfg.diffusion_config,
+        model_config=cfg.model_config,
+        dataset_config=cfg.dataset_config,
+        **cfg.generate_config,
     )
+
+    if num_gpus <= 1:
+        generate_fn(0)
+    else:
+        mp.set_start_method("spawn")
+        processes = []
+        for i in range(num_gpus):
+            p = mp.Process(target=generate_fn, args=(i,))
+            p.start()
+            processes.append(p)
+        for p in processes:
+            p.join()
+
+
+if __name__ == "__main__":
+    main()
