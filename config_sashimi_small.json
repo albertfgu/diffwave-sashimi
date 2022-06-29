@@ -35,7 +35,7 @@
         "n_samples": 32
     },
     "dataset_config":{
-        "data_path": "../data/sc09",
+        "data_path": "data/sc09",
         "segment_length": 16000,
         "sampling_rate": 16000
     },

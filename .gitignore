@@ -1,3 +1,5 @@
+exp/
+wandb/
 tensorboard/
 */tensorboard/
 *.log

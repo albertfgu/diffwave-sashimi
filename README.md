@@ -5,22 +5,24 @@ This repository contains code to reproduce the SaShiMi+DiffWave experiments from
 
 This repository is a supplement to the main [S4 repository]() which contains the official and up-to-date code for S4 and SaShiMi.
 The code here is *research code* - it was not originally planned to be released because it was forked from an external codebase instead of being incorporated into the main S4 codebase.
-However, we have decided to release the existing implementation to improve reproducibility for downstream researchers.
+However, we have decided to release the implementation used to produce results in the SaShiMi paper to improve reproducibility for downstream researchers.
+It is *not* recommended to use this to train SaShiMi models from scratch, as the core S4 model has undergone significant changes since that paper.
 
-Compared to the parent fork, this repository has
+Compared to the parent fork for DiffWave, this repository has:
 - Significantly improved infrastructure and documentation
 - Incorporation of the standalone [S4 module]() to create the SaShiMi DiffWave model (as well as the original DiffWave model which uses a WaveNet backbone)
 - Checkpoints for the main SaShiMi DiffWave models described in the paper
 
-If I had more time, these are some things I would add next:
+These are some features that would be nice to add:
 - Move from the original JSON based configuration system to [Hydra](https://hydra.cc)
 - Generate spectrograms on the fly based on the config instead of requiring a [separate step](#vocoding)
-- Incorporate latest SaShiMi standalone file; currently this reimplements the architecture using something close to V2 of the S4 standalone
+- Incorporate latest SaShiMi standalone file; currently this reimplements the architecture using a model predating V2 of the S4 standalone
 PRs are very welcome!
 
 ## Usage
 
-A basic experiment can be run with by passing in a config in the form of a JSON file.
+A basic experiment can be run with by passing in a config in the form of a JSON file
+```python distributed_train.py 
 
 ## Data
 
@@ -108,23 +110,39 @@ Some notes:
 
 Run the same training script, with the additional command argument pointing to the spectrogramfolder, e.g. `python distributed_train.py -c config_vocoder_baseline.json --mel_path mel256`
 
-## Usage:
-
-- To continue training the model, run ```python distributed_train.py -c config_vocoder.json```
-
-- To retrain the model, change the parameter ```ckpt_iter``` in the corresponding ```json``` file to ```-1``` and use the above command.
-
-- Note, you may need to carefully adjust some parameters in the ```json``` file, such as ```data_path``` and ```batch_size_per_gpu```.
-
-
-### Unconditional generation
-- To generate audio, run ```python inference.py -c config.json -n 16``` to generate 16 utterances.
 
 ### Conditional generation
-- To generate audio, run ```python inference.py -c config_${channel}.json -cond ${conditioner_name}```. For example, if the name of the mel spectrogram is ```LJ001-0001.wav.pt```, then ```${conditioner_name}``` is ```LJ001-0001```. Provided mel spectrograms include ```LJ001-0001``` through ```LJ001-0186```.
+- To generate audio, run ```python inference.py -c ${config}.json -cond ${conditioner_name}```. For example, if the name of the mel spectrogram is ```LJ001-0001.wav.pt```, then ```${conditioner_name}``` is ```LJ001-0001```. Provided mel spectrograms include ```LJ001-0001``` through ```LJ001-0186```.
 
 
-## Pretrained models and generated samples:
+## Pretrained Models
+
+### SaShiMi+DiffWave large
+
+Experiment folder: `exp/unet_d128_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
+Train from scratch: `python distributed_train.py -c config_sashimi_large.json`
+Resume training: `python distributed_train.py -c config_sashimi_large_decay.json`
+(as described in the paper, this model used a manual learning rate decay after 500k steps)
+
+To resume training, download the checkpoint into `<experiment_folder>/checkpoints/`...
+
+### SaShiMi+DiffWave small
+Experiment folder: `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
+
+
+### (WaveNet)+DiffWave large
+Experiment folder: `exp/wnet_h256_d36_T200_betaT0.02_uncond/`
+Config: `config_wavenet_large.json`
+
+### (WaveNet)+DiffWave small
+Experiment folder: `exp/wnet_h128_d30_T200_betaT0.02_uncond/`
+
+### Checkpoints
+
+### Samples
+Samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
+
+The above four models correspond to "sashimi-diffwave", "sashimi-diffwave-small", "diffwave", and "diffwave-small" respectively.
 
 ### Unconditional
 - [model](https://github.com/philsyn/DiffWave-unconditional/tree/master/exp/ch256_T200_betaT0.02/logs/checkpoint)
@@ -132,6 +150,8 @@ Run the same training script, with the additional command argument pointing to t
 
 config_sashimi_large.json
 Note that the learning rate in this model is 1e-4 because it was decayed by 0.5 at step 500k (see note in paper)
+
+Samples: https://huggingface.co/krandiash/sashimi-release/tree/main/samples
 
 ### Conditional
 - [channel=64 model](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch64_T50_betaT0.05/logs/checkpoint)

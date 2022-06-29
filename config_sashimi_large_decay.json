@@ -11,7 +11,7 @@
         "diffusion_step_embed_dim_in": 128,
         "diffusion_step_embed_dim_mid": 512,
         "diffusion_step_embed_dim_out": 512,
-        "res_channels": 256,
+        "res_channels": 128,
         "skip_channels": 256,
         "num_res_layers": 36,
         "dilation_cycle": 12,
@@ -26,10 +26,10 @@
     },
     "train_config": {
         "ckpt_iter": 500000,
-        "iters_per_ckpt": 10000,
+        "iters_per_ckpt": 1000,
         "iters_per_logging": 100,
         "n_iters": 1000001,
-        "learning_rate": 2e-4,
+        "learning_rate": 1e-4,
         "batch_size_per_gpu": 2,
         "wandb_mode": "online",
         "n_samples": 16

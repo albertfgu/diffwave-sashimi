@@ -11,7 +11,7 @@
         "diffusion_step_embed_dim_in": 128,
         "diffusion_step_embed_dim_mid": 512,
         "diffusion_step_embed_dim_out": 512,
-        "res_channels": 128,
+        "res_channels": 256,
         "skip_channels": 256,
         "num_res_layers": 36,
         "dilation_cycle": 12,
@@ -35,7 +35,7 @@
         "n_samples": 16
     },
     "dataset_config":{
-        "data_path": "../data/sc09",
+        "data_path": "data/sc09",
         "segment_length": 16000,
         "sampling_rate": 16000
     },
