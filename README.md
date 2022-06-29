@@ -115,7 +115,15 @@ Run the same training script, with the additional command argument pointing to t
 - To generate audio, run ```python inference.py -c ${config}.json -cond ${conditioner_name}```. For example, if the name of the mel spectrogram is ```LJ001-0001.wav.pt```, then ```${conditioner_name}``` is ```LJ001-0001```. Provided mel spectrograms include ```LJ001-0001``` through ```LJ001-0186```.
 
 
-## Pretrained Models
+# Pretrained Models
+
+The branch `git checkout checkpoints` is provided for the code used in the checkpoints.
+**This branch is only for reproducing results from the ICML 2022 paper - please do not report train-from-scratch results from this code.**
+Reasons are explained below.
+
+## SaShiMi
+
+The version of S4 used in these experiments is an outdated version of S4 that predates V2 (February 2022) of the [S4 repository](https://github.com/HazyResearch/state-spaces) (currently on V3 as of July 2022).
 
 ### SaShiMi+DiffWave large
 
@@ -129,13 +137,32 @@ To resume training, download the checkpoint into `<experiment_folder>/checkpoint
 ### SaShiMi+DiffWave small
 Experiment folder: `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
 
+## WaveNet
+
+The WaveNet backbone provided in the parent fork had a [small]() [bug]() where it used `x += y` instead of `x = x + y`.
+This can cause a difficult-to-trace error in some PyTorch + environment combinations (but sometimes it works; I never figured out when it's ok).
+These two lines are fixed in the main branch of this repo.
+
+However, for some reason when models are *trained using the wrong version* and *loaded using the correct version*,
+the model runs fine but produces inconsistent outputs, even in inference mode (i.e. generation produces static noise).
+So this branch for reproducing the checkpoints uses the incorrect version of these two lines.
+**If anyone knows why this happens, I would love to know! Shoot me an email or file an Issue!**
+
 
 ### (WaveNet)+DiffWave large
 Experiment folder: `exp/wnet_h256_d36_T200_betaT0.02_uncond/`
 Config: `config_wavenet_large.json`
 
+Notes:
+The fully trained model (1000000 steps) is the original checkpoint from the original repo philsyn/DiffWave-unconditional
+The checkpoint at 500000 steps is our version trained from scratch.
+These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`.
+I don't remember if I changed anything in the code to cause this; perhaps it could also be differences in PyTorch or versions or environments?
+
 ### (WaveNet)+DiffWave small
 Experiment folder: `exp/wnet_h128_d30_T200_betaT0.02_uncond/`
+
+Generate: `python distributed_inference.py -c config_wavenet_small.json -n 16 -b 16 --ckpt_iter max`
 
 ### Checkpoints
 
