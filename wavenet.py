@@ -176,7 +176,7 @@ class WaveNet(nn.Module):
         self.res_channels = res_channels
         self.skip_channels = skip_channels
         self.num_res_layers = num_res_layers
-        self.uncondition = unconditional
+        self.unconditional = unconditional
 
         # initial conv1x1 with relu
         self.init_conv = nn.Sequential(Conv(in_channels, res_channels, kernel_size=1), nn.ReLU())
@@ -189,7 +189,8 @@ class WaveNet(nn.Module):
                                              diffusion_step_embed_dim_in=diffusion_step_embed_dim_in,
                                              diffusion_step_embed_dim_mid=diffusion_step_embed_dim_mid,
                                              diffusion_step_embed_dim_out=diffusion_step_embed_dim_out,
-                                             mel_upsample=mel_upsample)
+                                             mel_upsample=mel_upsample,
+                                             unconditional=unconditional)
 
         # final conv1x1 -> relu -> zeroconv1x1
         self.final_conv = nn.Sequential(Conv(skip_channels, skip_channels, kernel_size=1),
