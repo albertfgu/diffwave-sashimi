@@ -42,7 +42,7 @@ import torch
 from distributed_util import *
 
 
-def main(config, stdout_dir, args_str, wandb_id, mel_path):
+def main(config, stdout_dir, args_str, name, wandb_id, mel_path):
     args_list = ['train.py']
     args_list += args_str.split(' ') if len(args_str) > 0 else []
 
@@ -51,6 +51,7 @@ def main(config, stdout_dir, args_str, wandb_id, mel_path):
     num_gpus = torch.cuda.device_count()
     args_list.append('--num_gpus={}'.format(num_gpus))
     args_list.append("--group_name=group_{}".format(time.strftime("%Y_%m_%d-%H%M%S")))
+    args_list.append(f'--name={name}')
     args_list.append(f'--wandb_id={wandb_id}')
     args_list.append(f'--mel_path={mel_path}')
 
@@ -82,6 +83,7 @@ if __name__ == '__main__':
                         help='double quoted string with space separated key value pairs')
     parser.add_argument('-w', '--wandb_id', type=str, default='')
     parser.add_argument('-m', '--mel_path', type=str, default='')
+    parser.add_argument('-n', '--name', type=str, default='')
 
     args = parser.parse_args()
-    main(args.config, args.stdout_dir, args.args_str, args.wandb_id, args.mel_path)
+    main(args.config, args.stdout_dir, args.args_str, args.name, args.wandb_id, args.mel_path)

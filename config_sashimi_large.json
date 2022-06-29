@@ -5,7 +5,7 @@
         "beta_T": 0.02,
         "beta": null
     },
-    "wavenet_config": {
+    "model_config": {
         "in_channels": 1,
         "out_channels": 1,
         "diffusion_step_embed_dim_in": 128,
@@ -34,7 +34,7 @@
         "wandb_mode": "online",
         "n_samples": 16
     },
-    "trainset_config":{
+    "dataset_config":{
         "data_path": "../data/sc09",
         "segment_length": 16000,
         "sampling_rate": 16000

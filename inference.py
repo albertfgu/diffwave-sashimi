@@ -22,13 +22,14 @@ def generate(
         num_samples,
         # ckpt_path,
         ckpt_iter,
+        name,
         diffusion_config,
         model_config,
         dataset_config,
         batch_size=0,
         ckpt_smooth=-1,
         rank=0,
-        mel_path="mel_spectrogram", mel_name="LJ001-0001",
+        mel_path=None, mel_name="LJ001-0001",
     ):
     """
     Generate audio based on ground truth mel spectrogram
@@ -46,7 +47,7 @@ def generate(
         print(f"rank {rank} {torch.cuda.device_count()} GPUs")
         torch.cuda.set_device(rank % torch.cuda.device_count())
 
-    local_path, output_directory = local_directory(model_config, diffusion_config, dataset_config, 'waveforms')
+    local_path, output_directory = local_directory(name, model_config, diffusion_config, dataset_config, 'waveforms')
 
     # map diffusion hyperparameters to gpu
     diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config, fast=True)  # dictionary of all diffusion hyperparameters
@@ -162,6 +163,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, default='config.json',
                         help='JSON file for configuration')
+    parser.add_argument('--name', type=str, default='',
+                        help='Name of experiment (prefix of experiment directory)')
     parser.add_argument('-ckpt_iter', '--ckpt_iter', default='max',
                         help='Which checkpoint to use; assign a number or "max"')
     parser.add_argument('-s', '--ckpt_smooth', default=-1, type=int,
@@ -199,6 +202,7 @@ if __name__ == "__main__":
         ckpt_smooth=args.ckpt_smooth,
         num_samples=args.num_samples,
         batch_size=args.batch_size,
+        name=args.name,
         diffusion_config=diffusion_config,
         model_config=model_config,
         dataset_config=dataset_config,

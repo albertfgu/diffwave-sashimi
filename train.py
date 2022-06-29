@@ -31,6 +31,7 @@ def train(num_gpus, rank, group_name, wandb_id,
         learning_rate, batch_size_per_gpu,
         wandb_mode,
         n_samples,
+        name=None,
         mel_path=None,
     ):
     """
@@ -79,7 +80,7 @@ def train(num_gpus, rank, group_name, wandb_id,
     #         os.chmod(checkpoint_directory, 0o775)
     #     print("output directory", checkpoint_directory, flush=True)
 
-    local_path, checkpoint_directory = local_directory(model_config, diffusion_config, dataset_config, 'checkpoint')
+    local_path, checkpoint_directory = local_directory(name, model_config, diffusion_config, dataset_config, 'checkpoint')
 
     # map diffusion hyperparameters to gpu
     diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config, fast=False)  # dictionary of all diffusion hyperparameters
@@ -193,7 +194,7 @@ def train(num_gpus, rank, group_name, wandb_id,
                     # mel_path="mel_spectrogram"
                     mel_name="LJ001-0001"
                 samples = generate(
-                    n_samples, n_iter,
+                    n_samples, n_iter, name,
                     diffusion_config, model_config, dataset_config,
                     mel_path=mel_path,
                     mel_name=mel_name,
@@ -226,6 +227,7 @@ if __name__ == "__main__":
                         help='name of group for distributed')
     parser.add_argument('-w', '--wandb_id', type=str, default='')
     parser.add_argument('-m', '--mel_path', type=str, default='')
+    parser.add_argument('-n', '--name', type=str, default='')
     args = parser.parse_args()
 
     # Parse configs. Globals nicer in this case
@@ -256,4 +258,4 @@ if __name__ == "__main__":
 
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
-    train(num_gpus, args.rank, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, mel_path=args.mel_path, **train_config)
+    train(num_gpus, args.rank, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, name=args.name, mel_path=args.mel_path, **train_config)

@@ -144,5 +144,5 @@ if __name__ == "__main__":
         melspectrogram = mel2samp.get_mel(audio)
         filename = os.path.basename(filepath)
         new_filepath = args.output_dir + '/' + filename + '.pt'
-        print(new_filepath)
+        # print(new_filepath)
         torch.save(melspectrogram, new_filepath)

@@ -10,13 +10,42 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils as U
-from pytorch_lightning.utilities import rank_zero_only
+# from pytorch_lightning.utilities import rank_zero_only
 from einops import rearrange, repeat
 from omegaconf import DictConfig
 import opt_einsum as oe
 
 contract = oe.contract
 
+
+# Paste pytorch-lightning's rank_zero_only decorator to avoid importing the full library
+# https://pytorch-lightning.readthedocs.io/en/stable/_modules/pytorch_lightning/utilities/rank_zero.html#rank_zero_only
+from typing import Callable, Optional, Any
+import os
+from functools import wraps
+def rank_zero_only(fn: Callable) -> Callable:
+    """Function that can be used as a decorator to enable a function/method being called only on rank 0."""
+
+    @wraps(fn)
+    def wrapped_fn(*args: Any, **kwargs: Any) -> Optional[Any]:
+        if rank_zero_only.rank == 0:
+            return fn(*args, **kwargs)
+        return None
+
+    return wrapped_fn
+
+def _get_rank() -> int:
+    # SLURM_PROCID can be set even if SLURM is not managing the multiprocessing,
+    # therefore LOCAL_RANK needs to be checked first
+    rank_keys = ("RANK", "LOCAL_RANK", "SLURM_PROCID", "JSM_NAMESPACE_RANK")
+    for key in rank_keys:
+        rank = os.environ.get(key)
+        if rank is not None:
+            return int(rank)
+    return 0
+
+# add the attribute to the function but don't overwrite in case Trainer has already set it
+rank_zero_only.rank = getattr(rank_zero_only, "rank", _get_rank())
 
 def get_logger(name=__name__, level=logging.INFO) -> logging.Logger:
     """Initializes multi-GPU-friendly python logger."""
@@ -82,7 +111,7 @@ def cauchy_conj(v, z, w, num=2, denom=2):
         ],
         reduction_op='Sum',
         axis=1,
-        dtype='float32' if v.dtype == torch.cfloat else 'float64',
+        # dtype='float32' if v.dtype == torch.cfloat else 'float64',
     )
 
     v, z, w = _broadcast_dims(v, z, w)
@@ -411,7 +440,8 @@ class OptimModule(nn.Module):
         elif trainable == 1:
             self.register_parameter(name, nn.Parameter(tensor))
         elif trainable == 2:
-            tensor = tensor.repeat(repeat, *(1,) * len(tensor.shape))
+            if repeat > 1:
+                tensor = tensor.repeat(repeat, *(1,) * len(tensor.shape))
             self.register_parameter(name, nn.Parameter(tensor))
         else:
             raise NotImplementedError
@@ -454,14 +484,16 @@ class SSKernelNPLR(OptimModule):
         N = C.size(-1)
         # Multiply C by I - dA_L
         C_ = C[..., 0, :]
-        C_ = torch.cat([C_, C_.conj()], dim=-1)
+        # C_ = torch.cat([C_, C_.conj()], dim=-1)
+        C_ = _conj(C_)
         prod = contract("... m n, ... n -> ... m", dA_L.conj().transpose(-1, -2), C_)
         if double_length:  # Multiply by I + dA_L instead
             C_ = C_ + prod
         else:
             C_ = C_ - prod
         C_ = C_[..., :N]
-        self.C[..., 0, :, :].copy_(torch.view_as_real(C_))
+        # self.C[..., 0, :, :].copy_(torch.view_as_real(C_))
+        self.C.copy_(torch.view_as_real(C_[..., None, :]))
 
     def _nodes(self, L, dtype, device):
         # Cache FFT nodes and their "unprocessed" them with the bilinear transform
@@ -475,46 +507,42 @@ class SSKernelNPLR(OptimModule):
 
     def __init__(
         self,
-        L,
-        w,
-        p,
-        q,
-        B,
-        C,
+        L, w, p, q, B, C,
         log_dt,
         trainable=None,
         lr=None,
         setup_C=False,
         keops=False,
+        hurwitz=False,
     ):
-        """Optim arguments into a representation. This occurs after init so that these operations can occur after moving model to device
-
+        """
         L: Maximum length; this module computes SSKernel function of length L
         A: (..., N, N) represented by diag(w) - pq^*
         B: (..., N)
-        C: (..., N)
+        C: (..., c, N) system is 1-D to c-D
         dt: (...)
-        p: (..., N) low-rank correction to A
-        q: (..., N)
+        p: (..., r, N) low-rank correction to A
+        q: (..., r, N)
         """
 
         super().__init__()
         self.keops = keops
+        self.hurwitz = hurwitz
 
         # Rank of low-rank correction
-        assert p.shape[-2] == q.shape[-2]
+        if q is not None: assert p.shape[-2] == q.shape[-2]
         self.rank = p.shape[-2]
         self.L = L
 
-        # Augment B and C with low rank correction
+        # Broadcast everything to shape of C
         B = B.unsqueeze(-2)  # (..., 1, N)
-        C = C.unsqueeze(-2)  # (..., 1, N)
-        if len(B.shape) > len(p.shape):
-            p = p.repeat(B.shape[:-2] + (1, 1))
-        B = torch.cat([B, p], dim=-2)
-        if len(C.shape) > len(q.shape):
-            q = q.repeat(C.shape[:-2] + (1, 1))
-        C = torch.cat([C, q], dim=-2)
+        if q is not None:
+            if len(C.shape) > len(q.shape):
+                q = q.repeat(C.shape[:-2] + (1, 1)) # TODO do with einops
+        if len(C.shape) > len(p.shape):
+            p = p.repeat(C.shape[:-2] + (1, 1))
+        if len(C.shape) > len(B.shape):
+            B = B.repeat(C.shape[:-2] + (1, 1))
 
         if L is not None:
             nodes, z = self._nodes(L, dtype=w.dtype, device=w.device)
@@ -522,41 +550,72 @@ class SSKernelNPLR(OptimModule):
             self.register_buffer("z", torch.view_as_real(z))
 
         # Register parameters
+        # TODO figure out conventions for registering P and Q
+        # trainable should be 0 or 2 by default (everything should train the H dimension)
+        # TODO broadcast p, q, B to same dim as C, remove repeat argument
         if trainable is None:
-            trainable = DictConfig({"A": 0, "B": 0, "C": 0, "dt": 0})
+            trainable = DictConfig({"A": 0, "B": 0, "C": 1, "P": 0, "Q": 0, "dt": 1})
         if lr is None:
-            lr = DictConfig({"A": None, "B": None, "C": None, "dt": None})
+            lr = DictConfig({"A": None, "B": None, "C": None, "P": None, "Q": None, "dt": None})
         repeat = C.size(0)
         self.register("log_dt", log_dt, trainable.dt, lr.dt, 0.0)
-        self.register("w", torch.view_as_real(w), trainable.A, lr.A, 0.0, repeat=repeat)
+        if self.hurwitz:
+            log_w_real = torch.log(-w.real)
+            w_imag = w.imag
+            self.register("log_w_real", log_w_real, trainable.A, lr.A, 0.0, repeat=repeat)
+            self.register("w_imag", w_imag, trainable.A, lr.A, 0.0, repeat=repeat)
+        else:
+            self.register("w", torch.view_as_real(w), trainable.A, lr.A, 0.0, repeat=repeat)
         self.register("B", torch.view_as_real(B), trainable.B, lr.B, 0.0, repeat=repeat)
         self.register("C", torch.view_as_real(C), trainable.C, lr.C)
+        self.register("p", torch.view_as_real(p), trainable.P, lr.P, 0.0, repeat=repeat)
+        if q is not None:
+            self.register("q", torch.view_as_real(q), trainable.Q, lr.Q, 0.0, repeat=repeat)
+        else:
+            self.q = None
+
+        self._is_diagonalized = False
 
         if setup_C:
             self._process_C(L)
+
+    def _w(self):
+        # Get the internal w (diagonal) parameter
+        if self.hurwitz:
+            # TODO maybe faster way to do this
+            w_real = -torch.exp(self.log_w_real)
+            w_imag = self.w_imag
+            w = w_real + 1j * w_imag
+        else:
+            w = torch.view_as_complex(self.w)  # (..., N)
+        return w
 
     def forward(self, state=None, rate=1.0, L=None):
         """
         state: (..., s, N) extra tensor that augments B
         rate: sampling rate factor
+
+        returns: (..., c+s, L)
         """
         # if L is not None: raise NotImplementedError
 
         # TODO: handle potential length doubling logic so that max_len doesn't need to be passed in
-        while rate == 1.0 and L > self.L:
-            log.info(f"s4: Doubling length from L = {self.L} to {2*self.L}")
+        while rate == 1.0 and L is not None and L > self.L:
+            log.info(f"S4: Doubling length from L = {self.L} to {2*self.L}")
             self.double_length()
 
         if L is None:
             L = self.L
-        if rate == 1.0:
+        if rate == 1.0: # [AG 22-02-02 I forget what this is for but I remember it gave me a headache so don't touch]
             L = self.L
         else:
             rate = self.L / L
         dt = torch.exp(self.log_dt) * rate
         B = torch.view_as_complex(self.B)
         C = torch.view_as_complex(self.C)
-        w = torch.view_as_complex(self.w)  # (..., N)
+        p = torch.view_as_complex(self.p)
+        q = p if self.q is None else torch.view_as_complex(self.q)
+        w = self._w()
         # z = torch.view_as_complex(self.z) # (..., L)
 
         # TODO adjust based on rate times normal max length
@@ -567,12 +626,12 @@ class SSKernelNPLR(OptimModule):
             nodes, z = self._nodes(L, dtype=w.dtype, device=w.device)
 
         # Augment B
-        if state is not None:  # TODO have not updated
+        if state is not None:  # TODO have not tested since p/q refactor
             # Have to "unbilinear" the state to put it into the same "type" as B
             # Compute (I + dt/2 A) @ state
             s = state.transpose(0, 1)  # (H B N)
-            p = B[..., 1:, :]  # (... r N)
-            q = C[..., 1:, :]  # (... r N)
+            # p = B[..., 1:, :]  # (... r N)
+            # q = C[..., 1:, :]  # (... r N)
 
             # Calculate contract('... s n, ... r n, ... r m -> ... s m', sV, qV.conj(), pV), but take care of conjugate symmetry
             sA = (
@@ -586,8 +645,12 @@ class SSKernelNPLR(OptimModule):
         # Incorporate dt into A
         w = w * dt.unsqueeze(-1)  # (... N)
 
+        # Stack B and p, C and q for convenient batching
+        B = torch.cat([B, p], dim=-2) # (..., 1+s+r, N)
+        C = torch.cat([C, q], dim=-2) # (..., c+r, N)
+
         # Incorporate B and C batch dimensions
-        v = B.unsqueeze(-3) * C.unsqueeze(-2).conj()  # (..., 2, 2, N)
+        v = B.unsqueeze(-3) * C.unsqueeze(-2).conj()  # (..., c+r, 1+s+r, N)
         w = w[..., None, None, :]  # (..., 1, 1, N)
         z = z[..., None, None, :]  # (..., 1, 1, L)
 
@@ -596,7 +659,7 @@ class SSKernelNPLR(OptimModule):
             r = cauchy_mult(v, z, w, symmetric=True)
         else:
             r = cauchy_conj(v, z, w)
-        r = r * dt[..., None, None, None]  # (..., 1+r, 1+r, L)
+        r = r * dt[..., None, None, None]  # (..., c+r, 1+s+r, L)
 
         # Low-rank Woodbury correction
         if self.rank == 1:
@@ -634,14 +697,15 @@ class SSKernelNPLR(OptimModule):
         # Final correction for the bilinear transform
         k_f = k_f * 2 / (1 + nodes)
 
-        k = torch.fft.irfft(k_f)  # (..., 1, 1+s, L)
+        k = torch.fft.irfft(k_f)  # (..., c, 1+s, L)
         if state is not None:
-            k_state = k[..., 0, :-1, :]  # (..., s, L)
-            k_state = k_state.transpose(0, 1)
-            k_B = k[..., 0, -1, :]  # (..., L)
+            k_state = k[..., :, :-1, :]  # (..., c, s, L) # TODO what happens when c > 1
+            # k_state = k_state.transpose(0, 1)
+            k_state = rearrange(k_state, '... c s l -> s ... c l')
+            k_B = k[..., :, -1, :]  # (..., L)
             return k_B.to(torch.float), k_state.to(torch.float)
         else:
-            return k.squeeze(-2).squeeze(-2).to(torch.float)
+            return k.squeeze(-2).to(torch.float)
 
     @torch.no_grad()
     def double_length(self):
@@ -661,18 +725,25 @@ class SSKernelNPLR(OptimModule):
 
         K = krylov(self.L, self.dA, self.dB, self.dC.conj())
 
-        diff = K - self.forward()
+        diff = K - self.forward(L=self.L)
         print("checking SSKernel construction", torch.sum(diff ** 2))
 
     def _setup(self, setup_C=True):
-        w = _conj(torch.view_as_complex(self.w))
+        # w = _conj(torch.view_as_complex(self.w))
+        w = _conj(self._w())
         B = _conj(torch.view_as_complex(self.B))
         C = _conj(torch.view_as_complex(self.C))
         C = C.conj()
-        p = B[..., -1, :]
-        q = C[..., -1, :]
+        # p = B[..., -1, :]
+        # q = C[..., -1, :]
         B = B[..., 0, :]
         C = C[..., 0, :]
+        p = _conj(torch.view_as_complex(self.p))
+        q = _conj(torch.view_as_complex(self.q))
+        # TODO for now we're only handling the case where p and q are rank 1
+        p = p[..., 0, :]
+        q = q[..., 0, :]
+        q = q.conj()
         dt = torch.exp(self.log_dt)
         d = (2.0 / dt.unsqueeze(-1) - w).reciprocal()  # (H, N)
         r = (1 + contract("... n, ... n, ... n -> ...", q, d, p)).reciprocal()
@@ -704,12 +775,40 @@ class SSKernelNPLR(OptimModule):
         self.dB = dB
 
         if setup_C:
-            dA_L = power(self.L, dA)
-            I = torch.eye(dA.size(-1)).to(dA)
+            # dA_L = power(self.L, dA)
+            # I = torch.eye(dA.size(-1)).to(dA)
+            # dC = torch.linalg.solve(
+            #     I - dA_L.transpose(-1, -2).conj(), 
+            #     C.conj().unsqueeze(-1),
+            # ).squeeze(-1)
+            dA_L = power(self.L, dA.to(torch.complex128))
+            I = torch.eye(dA.size(-1)).to(dA_L)
             dC = torch.linalg.solve(
-                I - dA_L.transpose(-1, -2).conj(), C.conj().unsqueeze(-1)
+                I - dA_L.transpose(-1, -2).conj(), 
+                C.conj().unsqueeze(-1).to(torch.complex128),
             ).squeeze(-1)
-            self.dC = dC
+            self.C__ = C
+            if len(torch.where(dC.isnan())[0]):
+                print("NaN in dC")
+                # Compute the eigendecomposition of the A matrix
+                L, V = torch.linalg.eig(dA)
+            self.dC = dC.to(torch.complex64)
+
+    def _setup_diagonal_representation(self):
+        # Eigendecomposition of the A matrix
+        L, V = torch.linalg.eig(self.dA)
+        V_inv = torch.linalg.inv(V)
+        # Check that the eigendedecomposition is correct
+        # torch.dist(V @ torch.diag_embed(L) @ V_inv, self.dA)
+
+        # Change the parameterization to diagonalize
+        self.dA = torch.diag_embed(L)
+        self.dA_diag = L
+        self.dB = contract('h n m, h m -> h n', V_inv, self.dB)
+        # self.dC = contract('h n, h n m -> h m', self.dC, V)
+        self.dC = contract('h n m, h n -> h m', V.conj(), self.dC)
+
+        self._is_diagonalized = True
 
     def step_state_linear(self, u=None, state=None):
         """Version of the step function that has time O(N) instead of O(N^2) per step. Unfortunately, as currently implemented it's about 2x slower because it calls several sequential operations. Perhaps a fused CUDA kernel implementation would be much faster"""
@@ -758,14 +857,43 @@ class SSKernelNPLR(OptimModule):
         conj = state.size(-1) != self.dA.size(-1)
         if conj:
             state = _conj(state)
-        next_state = contract("h m n, b h n -> b h m", self.dA, state) + contract(
-            "h n, b h -> b h n", self.dB, u
-        )
+
+        if not hasattr(self, 'state_contraction_1'):
+
+            if self._is_diagonalized:
+                self.state_contraction_1 = contract_expression(
+                    "h n, b h n -> b h n",
+                    self.dA_diag.shape,
+                    state.shape,
+                )
+            else:
+                self.state_contraction_1 = contract_expression(
+                    "h m n, b h n -> b h m",
+                    self.dA.shape,
+                    state.shape,
+                )
+        
+        if not hasattr(self, 'state_contraction_2'):
+            self.state_contraction_2 = contract_expression(
+                "h n, b h -> b h n",
+                self.dB.shape,
+                u.shape,
+            )
+
+        if self._is_diagonalized:
+            # next_state = self.state_contraction_1(self.dA_diag, state) + self.state_contraction_2(self.dB, u)
+            next_state = self.dA_diag * state + self.state_contraction_2(self.dB, u)
+        else:
+            next_state = self.state_contraction_1(self.dA, state) + self.state_contraction_2(self.dB, u)
+        
+        # next_state = contract("h m n, b h n -> b h m", self.dA, state) + contract(
+        #     "h n, b h -> b h n", self.dB, u
+        # )
         if conj:
             next_state = next_state[..., : state.size(-1) // 2]
         return next_state
 
-    def step(self, u, state, linear=False):
+    def step(self, u, state, linear=False, approximate_C=False):
 
         N = self.step_params["d"].size(-1)
         conj = state.size(-1) != N
@@ -775,103 +903,31 @@ class SSKernelNPLR(OptimModule):
         else:
             new_state = self.step_state(u, state)
 
+        if approximate_C:
+            # C is approximated using data in the equation y_t = x_t C
+            assert hasattr(self, 'dC_'), "C approximation is missing."
+            out = contract("... n, ... n -> ...", self.dC_, new_state)
+            return out.to(torch.float), new_state
+
         if conj:
             assert state.size(-1) == N // 2
             # dC = self.dC[..., 0::2].conj()
             dC = self.dC[..., : N // 2].conj()
             out = 2 * torch.sum(dC * new_state, dim=-1).real  # conj version
         else:
-            out = contract("... n, ... n -> ...", self.dC.conj(), new_state)
+            if not hasattr(self, 'contraction_1'):
+                self.contraction_1 = contract_expression(
+                    "... n, ... n -> ...",
+                    self.dC.shape,
+                    new_state.shape,
+                )
+            out = self.contraction_1(self.dC.conj(), new_state)            
+            # out = contract("... n, ... n -> ...", self.dC.conj(), new_state)
         return out.to(torch.float), new_state
 
 
-class SSKernelSlow(OptimModule):
-    """Slow version of SSKernel function for illustration and benchmarking.
 
-    - Caches discretized matrices A^(dt), B^(dt)
-    - Computes K_L(A^dt, B^dt, C)
 
-    Usage:
-    ```
-    krylov = SSKernelSlow(L, A, B, C, log_dt)()
-    ```
-    Result is expected to be equal to SSKernelNPLR(L, A, B, C, log_dt, p, q)() for p, q such that A+pq^T is normal
-    """
-
-    def __init__(self, L, A, B, C, log_dt, trainable=None, lr=None):
-        super().__init__()
-        self.N = A.shape[-1]
-        self.L = L
-        dA, dB = SSKernelSlow.bilinear(torch.exp(log_dt), A, B)
-
-        # Register parameters
-        if trainable is None:
-            trainable = DictConfig({"A": 0, "B": 0, "C": 0, "dt": 0})
-        if lr is None:
-            lr = DictConfig({"A": None, "B": None, "C": None, "dt": None})
-        if trainable is not None and lr is not None:
-            repeat = C.size(0)
-            self.register("log_dt", log_dt, trainable.dt, lr.dt)
-            self.register("dA", dA, trainable.A, lr.A, repeat=repeat)
-            self.register("dB", dB, 1, lr.B)
-            self.register("C", C, trainable.C, lr.C)
-
-    def forward(self, rate=1.0, L=None, state=None):
-        if L is None:
-            L = self.L
-        if rate is None:
-            rate = self.L / L  # TODO this class doesn't actually support rates
-        k = krylov(L, self.dA, self.dB, self.C.conj())  # (H L)
-        if state is not None:
-            if state.size(-1) != self.dA.size(-1):
-                state = _conj(state)
-            state = state.to(self.dA)
-            state = contract("... n m, ... m -> ... n", self.dA, state)
-            k_state = krylov(L, self.dA, state, self.C.conj())
-            return k.to(torch.float), k_state.to(torch.float)
-        return k.to(torch.float)
-
-    @classmethod
-    def bilinear(cls, dt, A, B=None, separate=False):
-        """
-        dt: (...) timescales
-        A: (... N N)
-        B: (... N)
-        """
-        N = A.shape[-1]
-        I = torch.eye(N).to(A)
-        A_backwards = I - dt[:, None, None] / 2 * A
-        A_forwards = I + dt[:, None, None] / 2 * A
-
-        if B is None:
-            dB = None
-        else:
-            dB = dt[..., None] * torch.linalg.solve(
-                A_backwards, B.unsqueeze(-1)
-            ).squeeze(
-                -1
-            )  # (... N)
-
-        if separate:
-            A_b = torch.linalg.solve(A_backwards, I)  # (... N N)
-            return A_forwards, A_b, dB
-        else:
-            dA = torch.linalg.solve(A_backwards, A_forwards)  # (... N N)
-            return dA, dB
-
-    def _setup(self, setup_C=True):
-        if setup_C:
-            self.dC = self.C
-
-    def step(self, u, state):
-        state = state.to(self.dA)
-        if state.size(-1) != self.dA.size(-1):
-            state = _conj(state)
-        next_state = contract("h m n, b h n -> b h m", self.dA, state) + contract(
-            "h n, b h -> b h n", self.dB, u
-        )
-        y = contract("... n, ... n -> ...", self.dC.conj(), next_state)
-        return y.to(torch.float), next_state
 
 
 class HippoSSKernel(nn.Module):
@@ -886,14 +942,17 @@ class HippoSSKernel(nn.Module):
         rank=1,
         dt_min=0.001,
         dt_max=0.1,
+        channels=1,
         trainable=None,
         lr=None,
         mode="nplr",  # 'slow' for complex naive version, 'real' for real naive version
-        length_correction=False,
-        precision=1,
-        cache=False,
+        tied_lr=False,
+        length_correction=False, # Multiply by I-A|^L after initialization
+        precision=1, # 1 (single) or 2 (double) for the kernel
+        cache=False, # Cache kernel at eval time
         resample=False,  # if given inputs of different lengths, adjust the sampling rate
-        keops=False,
+        keops=False, # Force pykeops
+        hurwitz=False,
     ):
         super().__init__()
         self.N = N
@@ -909,6 +968,8 @@ class HippoSSKernel(nn.Module):
                 "A": 0,
                 "B": 0,
                 "C": 1,
+                "P": 0, # TODO fix for NPLR vs slow
+                "Q": 0,
                 "dt": 0,
             }
         )
@@ -919,6 +980,8 @@ class HippoSSKernel(nn.Module):
                 "A": 1e-3,
                 "B": 1e-3,
                 "C": None,
+                "P": 1e-3,
+                "Q": 1e-3,
                 "dt": 1e-3,
             }
         )
@@ -933,7 +996,7 @@ class HippoSSKernel(nn.Module):
         # Compute the preprocessed representation
         if mode == "real":  # Testing purposes only
             # Generate A, B
-            A, B = transition(measure, N)
+            A, B = hippo.transition(measure, N)
             A = torch.as_tensor(A, dtype=dtype)
             B = torch.as_tensor(B, dtype=dtype)[:, 0]
 
@@ -945,10 +1008,18 @@ class HippoSSKernel(nn.Module):
             )
         else:
             # Generate low rank correction p for the measure
-            w, p, q, B, _ = nplr(measure, N, rank, dtype=dtype)
+            if measure == 'random':
+                w, p, q, B, _ = nplr('legs', N, rank, dtype=dtype)
+                w = torch.randn_like(w, dtype=torch.cfloat)
+                p = torch.randn_like(p, dtype=torch.cfloat)
+                q = torch.randn_like(q, dtype=torch.cfloat)
+                B = torch.randn_like(B, dtype=torch.cfloat)
+            else:
+                w, p, q, B, _ = nplr(measure, N, rank, dtype=dtype)
             cdtype = torch.cfloat if dtype == torch.float else torch.cdouble
-            C = torch.randn(self.H, self.N // 2, dtype=cdtype)
+            C = torch.randn(self.H, channels, self.N // 2, dtype=cdtype)
             if mode == "nplr":
+                if tied_lr: q = None
                 self.krylov = SSKernelNPLR(
                     L,
                     w,
@@ -961,6 +1032,7 @@ class HippoSSKernel(nn.Module):
                     lr=self.lr,
                     setup_C=length_correction,
                     keops=keops,
+                    hurwitz=hurwitz,
                 )
             elif mode == "slow":  # Testing only
                 A = torch.diag_embed(_conj(w)) - contract(
@@ -1029,8 +1101,8 @@ class HippoSSKernel(nn.Module):
             next_state = next_state[..., : next_state.size(-1) // 2]
         return next_state
 
-    def step(self, u, state):
-        return self.krylov.step(u, state)
+    def step(self, u, state, **kwargs):
+        return self.krylov.step(u, state, **kwargs)
 
     def double_length(self):
         self.krylov.double_length()
@@ -1069,6 +1141,7 @@ class S4(nn.Module):
             mode='nplr',
             keops=False,
             bidirectional=False,
+            channels=1,
         ):
         """
         d_state: the dimension of the state, also denoted by N
@@ -1098,27 +1171,18 @@ class S4(nn.Module):
         self.transposed = transposed
         self.resample = resample
         self.bidirectional = bidirectional
+        self.channels = channels
+        self.L = l_max
 
-        self.D = nn.Parameter(torch.randn(self.h))
+        self.D = nn.Parameter(torch.randn(self.h, channels))
 
-        # Optional (position-wise) input transform
-        if input_linear:
-            self.input_linear = LinearActivation(
-                self.h,
-                self.h,
-                transposed=self.transposed,
-                initializer=initializer,
-                activation=postact,
-                activate=True,
-                weight_norm=weight_norm,
-            )
-        else:
-            self.input_linear = nn.Identity()
+        if self.bidirectional:
+            channels *= 2
 
         # SSM Kernel
-        self.kernel = HippoSSKernel(self.n, self.h, l_max, dt_min=dt_min, dt_max=dt_max, measure=measure, rank=rank, trainable=trainable, lr=lr, length_correction=length_correction, precision=precision, cache=cache, mode=mode, resample=resample, keops=keops)
-        if self.bidirectional:
-            self.kernel2 = HippoSSKernel(self.n, self.h, l_max, dt_min=dt_min, dt_max=dt_max, measure=measure, rank=rank, trainable=trainable, lr=lr, length_correction=length_correction, precision=precision, cache=cache, mode=mode, resample=resample, keops=keops)
+        self.kernel = HippoSSKernel(self.n, self.h, l_max, dt_min=dt_min, dt_max=dt_max, measure=measure, rank=rank, trainable=trainable, lr=lr, length_correction=length_correction, precision=precision, cache=cache, mode=mode, resample=resample, keops=keops, channels=channels)
+        # if self.bidirectional:
+        #     self.kernel2 = HippoSSKernel(self.n, self.h, l_max, dt_min=dt_min, dt_max=dt_max, measure=measure, rank=rank, trainable=trainable, lr=lr, length_correction=length_correction, precision=precision, cache=cache, mode=mode, resample=resample, keops=keops, channels=channels)
 
         self.K = None # Cache the computed convolution filter if possible (during evaluation)
 
@@ -1142,7 +1206,8 @@ class S4(nn.Module):
 
         # position-wise output transform to mix features
         self.output_linear = LinearActivation(
-            2*self.h if self.bidirectional else self.h,
+            # 2*self.h if self.bidirectional else self.h,
+            self.h*self.channels,
             self.h,
             transposed=self.transposed,
             initializer=initializer,
@@ -1162,46 +1227,40 @@ class S4(nn.Module):
 
         Returns: same shape as u
         """
-        u = self.input_linear(u)
         if not self.transposed: u = u.transpose(-1, -2)
         L = u.size(-1)
 
         # Compute SS Kernel
-        if state is not None:
-            assert self.stride == 1, "Striding not supported with states"
-            k, k_state = self.kernel(state=state, L=L)
-        else:
-            k = self.kernel(L=L)
+        assert state is None
+        k = self.kernel(L=self.L)
 
-        # Stride the filter if needed
-        if self.stride > 1:
-            k = k[..., :L // self.stride] # (H, L/S)
-            k = F.pad(k.unsqueeze(-1), (0, self.stride-1)) # (H, L/S, S)
-            k = rearrange(k, '... h s -> ... (h s)') # (H, L)
-        else:
-            k = k[..., :L]
+        k = k[..., :self.L]
 
         # Convolution
 
-        k_f = torch.fft.rfft(k, n=2*L) # (H L)
-        u_f = torch.fft.rfft(u, n=2*L) # (B H L)
-        y_f = k_f * u_f
-        y = torch.fft.irfft(y_f, n=2*L)[..., :L] # (B H 2L)
+        if self.bidirectional:
+            C = k.size(-2) // 2
+            k = F.pad(k[..., :C, :], (0, 2*L-self.L)) \
+                    + F.pad(k[..., C:, :].flip(-1), (2*L-self.L, 0)) \
 
-        # offset = L//2 if self.bidirectional else 0
-        # y = y[..., offset:offset+L] # (B H L)
+        # TODO can padd to L + self.L
+        k_f = torch.fft.rfft(k, n=2*L) # (H C L)
+        u_f = torch.fft.rfft(u, n=2*L) # (B H L)
+        y_f = k_f * u_f.unsqueeze(-2) # (B H C L)
+        y = torch.fft.irfft(y_f, n=2*L)[..., :L] # (B H C L)
 
         # Compute D term in state space equation - essentially a skip connection
-        y = y + u * self.D.unsqueeze(-1)
+        # y = y + u * self.D.unsqueeze(-1)
+        y = y + u.unsqueeze(-2) * self.D.unsqueeze(-1)
 
         # bidirectional attempt 2
-        if self.bidirectional:
-            k2 = self.kernel2(L=L)[..., :L]
-            k2_f = torch.fft.rfft(k2.flip(-1), n=2*L)
-            y2_f = k2_f * u_f
-            y2 = torch.fft.irfft(y2_f, n=2*L)[..., L-1:-1]
-            y2 = y2 + u * self.D.unsqueeze(-1)
-            y = torch.cat([y, y2], dim=-2)
+        # if self.bidirectional:
+        #     k2 = self.kernel2(L=L)[..., :L]
+        #     k2_f = torch.fft.rfft(k2.flip(-1), n=2*L)
+        #     y2_f = k2_f * u_f.unsqueeze(-2)
+        #     y2 = torch.fft.irfft(y2_f, n=2*L)[..., L-1:-1]
+        #     y2 = y2 + u.unsqueeze(-2) * self.D.unsqueeze(-1)
+        #     y = torch.cat([y, y2], dim=-2)
 
 
 
@@ -1216,6 +1275,9 @@ class S4(nn.Module):
         if self.hyper:
             hyper = self.hyper_linear(u)
             y = hyper * y
+
+        # Reshape to flatten channels
+        y = rearrange(y, '... h c l -> ... (h c) l')
 
         y = self.dropout(self.activation(y))
 

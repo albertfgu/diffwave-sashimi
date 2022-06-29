@@ -252,7 +252,7 @@ def training_loss(net, loss_fn, audio, diffusion_hyperparams, mel_spec=None):
     return loss_fn(epsilon_theta, z)
 
 
-def local_directory(model_config, diffusion_config, dataset_config, output_directory):
+def local_directory(name, model_config, diffusion_config, dataset_config, output_directory):
     # tensorboard_directory = train_config['tensorboard_directory']
     # ckpt_path = output_directory # train_config['output_directory']
 
@@ -282,6 +282,9 @@ def local_directory(model_config, diffusion_config, dataset_config, output_direc
     else:
         data_name = f"_L{dataset_config['segment_length']}_hop{dataset_config['hop_length']}"
     local_path = model_name + diffusion_name + data_name + f"_{'uncond' if model_config['unconditional'] else 'cond'}"
+
+    if not (name is None or name == ""):
+        local_path = name + "_" + local_path
 
     # Get shared output_directory ready
     output_directory = os.path.join('exp', local_path, output_directory)

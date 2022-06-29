@@ -112,7 +112,7 @@ class ZeroConv1d(nn.Module):
 # contains one noncausal dilated conv
 class DiffWaveBlock(nn.Module):
     def __init__(self,
-            d_model, L, ff, channels,
+            d_model, L, ff,
             diffusion_step_embed_dim_out=512,
             unconditional=False,
             mel_upsample=[16,16],
@@ -123,7 +123,7 @@ class DiffWaveBlock(nn.Module):
         # the layer-specific fc for diffusion step embedding
         self.fc_t = nn.Linear(diffusion_step_embed_dim_out, self.d_model)
 
-        self.layer = S4(d_model, L, channels=channels, bidirectional=True)
+        self.layer = S4(d_model, L, bidirectional=True)
         self.ff = FF(d_model, ff)
 
         self.norm1 = TransposedLN(d_model)
@@ -193,7 +193,6 @@ class Sashimi(nn.Module):
             expand=2,
             ff=2,
             unet=True,
-            channels=1,
             diffusion_step_embed_dim_in=128,
             diffusion_step_embed_dim_mid=512,
             diffusion_step_embed_dim_out=512,
@@ -224,7 +223,7 @@ class Sashimi(nn.Module):
 
         def _residual(d, L):
             return DiffWaveBlock(
-                d, L, ff, channels,
+                d, L, ff,
                 unconditional=unconditional,
                 mel_upsample=mel_upsample,
                 # prenorm=prenorm,

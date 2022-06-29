@@ -12,6 +12,12 @@ Compared to the parent fork, this repository has
 - Incorporation of the standalone [S4 module]() to create the SaShiMi DiffWave model (as well as the original DiffWave model which uses a WaveNet backbone)
 - Checkpoints for the main SaShiMi DiffWave models described in the paper
 
+If I had more time, these are some things I would add next:
+- Move from the original JSON based configuration system to [Hydra](https://hydra.cc)
+- Generate spectrograms on the fly based on the config instead of requiring a [separate step](#vocoding)
+- Incorporate latest SaShiMi standalone file; currently this reimplements the architecture using something close to V2 of the S4 standalone
+PRs are very welcome!
+
 ## Usage
 
 A basic experiment can be run with by passing in a config in the form of a JSON file.
@@ -19,10 +25,22 @@ A basic experiment can be run with by passing in a config in the form of a JSON 
 ## Data
 
 Unconditional generation uses the SC09 dataset by default, while vocoding uses [LJSpeech](https://keithito.com/LJ-Speech-Dataset/).
-For SC09, extract the Speech Commands dataset and move the digits subclasses into a separate folder, e.g. `./data/sc09/{zero,one,two,three,four,five,six,seven,eight,nine}`.
-For LJSpeech, after unzipping, the waveforms should be organized in the folder `./data/ljspeech/LJSpeech-1.1/wavs`.
+The entry `dataset_config.data_path` of the config should point to the desired folder, e.g. `data/sc09` or `data/LJSpeech-1.1/wavs`.
 
-The entry `dataset_config.data_path` of the config should point to the desired folder.
+### SC09
+For SC09, extract the Speech Commands dataset and move the digits subclasses into a separate folder, e.g. `./data/sc09/{zero,one,two,three,four,five,six,seven,eight,nine}`.
+
+### LJSpeech
+
+Download the LJSpeech dataset into a folder. For example (as of 2022/06/28):
+```
+mkdir data && cd data
+wget https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2
+tar xvf LJSpeech-1.1.tar.bz2
+```
+The waveforms should be organized in the folder `./data/LJSpeech-1.1/wavs`.
+
+
 
 ## Models
 
@@ -70,7 +88,7 @@ You may want to change the project name on line []
 To resume from the checkpoint `exp/<run>/checkpoint/1000.pkl`, simply set `train_config.ckpt_iter=1000` in the config and re-run the same command, `python distributed_train.py -c config.json`.
 `train_config.ckpt_iter=max` resumes from the last checkpoint, and `train_config.ckpt_iter=-1` trains from scratch.
 
-Use `-w <id>` to resume logging to a wandb run ID
+Use `--wandb_id <id>` to resume logging to a wandb run ID
 
 ## Generating
 
@@ -82,6 +100,13 @@ to generate 2048 samples (total) at a batch size of 128 per GPU from the model s
 Generated samples will be stored in `exp/<run>/waveforms/<ckpt_iter>/`
 
 ## Vocoding
+
+First create spectrograms to condition on: `python mel2samp.py -f ../data/ljspeech/LJSpeech-1.1/wavs -c config_vocoder.json -o mel256` to put which creates spectrograms based on the arguments in the `dataset_config`. (Here 256 refers to the hop size, but you can use any folder name.)
+Some notes:
+- The hop size affects how much upsampling is needed in the diffusion upsampling. The parameter `mel_upsample` controls this; the product of the upsample sizes should equal the hop size.
+- Note that these spectrograms are only used for inference/generation. With a small tweak it should be possible to generate them on the fly to avoid this hassle of creating spectrograms separately
+
+Run the same training script, with the additional command argument pointing to the spectrogramfolder, e.g. `python distributed_train.py -c config_vocoder_baseline.json --mel_path mel256`
 
 ## Usage:
 
@@ -116,8 +141,4 @@ Note that the learning rate in this model is 1e-4 because it was decayed by 0.5 
 
 
 # Notes
-
-- create spectrograms: `python mel2samp.py -f ../data/ljspeech/LJSpeech-1.1/wavs -c config_vocoder.json -o mel1024` to put which creates them based on the dataset_config in the folder mel1024 (my convention is to store the hop length or other relevant information in the folder name)
-
-(Note that these spectrograms are only used for inference/generation; with a small tweak it should be possible to generate them on the fly to avoid this hassle)
 
