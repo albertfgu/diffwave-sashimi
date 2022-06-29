@@ -166,6 +166,8 @@ Generate: `python distributed_inference.py -c config_wavenet_small.json -n 16 -b
 
 ### Checkpoints
 
+`git lfs pull`
+
 ### Samples
 Samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
 

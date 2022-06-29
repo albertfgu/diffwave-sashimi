@@ -20,14 +20,14 @@ from model import construct_model
 def generate(
         # output_directory, # tensorboard_directory,
         rank,
-        num_samples,
-        # ckpt_path,
+        # n_samples,
+        n_samples, # Samples per GPU
         ckpt_iter,
         name,
         diffusion_config,
         model_config,
         dataset_config,
-        batch_size=0,
+        batch_size=None,
         ckpt_smooth=-1,
         mel_path=None, mel_name="LJ001-0001",
     ):
@@ -36,7 +36,7 @@ def generate(
 
     Parameters:
     output_directory (str):         checkpoint path
-    num_samples (int):              number of samples to generate, default is 4
+    n_samples (int):              number of samples to generate, default is 4
     ckpt_iter (int or 'max'):       the pretrained checkpoint to be loaded;
                                     automatically selects the maximum iteration if 'max' is selected
     """
@@ -93,9 +93,9 @@ def generate(
     #         os.makedirs(output_directory)
     #         os.chmod(output_directory, 0o775)
 
-    if batch_size <= 0:
-        batch_size = num_samples
-    assert num_samples % batch_size == 0
+    if batch_size is None:
+        batch_size = n_samples
+    assert n_samples % batch_size == 0
 
     if mel_path is not None and mel_name is not None:
         # use ground truth mel spec
@@ -109,7 +109,7 @@ def generate(
         # predefine audio shape
         audio_length = dataset_config["segment_length"]  # 16000
         ground_truth_mel_spectrogram = None
-    print(f'begin generating audio of length {audio_length} | {num_samples} samples with batch size {batch_size}')
+    print(f'begin generating audio of length {audio_length} | {n_samples} samples with batch size {batch_size}')
 
     # inference
     start = torch.cuda.Event(enable_timing=True)
@@ -118,7 +118,7 @@ def generate(
 
     generated_audio = []
 
-    for _ in range(num_samples // batch_size):
+    for _ in range(n_samples // batch_size):
         _audio = sampling(
             net,
             (batch_size,1,audio_length),
@@ -130,19 +130,19 @@ def generate(
 
     end.record()
     torch.cuda.synchronize()
-    print('generated {} samples shape {} at iteration {} in {} seconds'.format(num_samples,
+    print('generated {} samples shape {} at iteration {} in {} seconds'.format(n_samples,
         generated_audio.shape,
         ckpt_iter,
         int(start.elapsed_time(end)/1000)))
 
     # save audio to .wav
-    for i in range(num_samples):
+    for i in range(n_samples):
         outfile = '{}k_{}.wav'.format(
         # outfile = '{}_{}_{}k_{}.wav'.format(
             # model_config["res_channels"],
             # diffusion_config["T"],
             ckpt_iter // 1000,
-            num_samples*rank + i,
+            n_samples*rank + i,
         )
         wavwrite(os.path.join(output_directory, outfile),
                     dataset_config["sampling_rate"],
@@ -167,7 +167,7 @@ if __name__ == "__main__":
                         help='Which checkpoint to use; assign a number or "max"')
     parser.add_argument('-s', '--ckpt_smooth', default=-1, type=int,
                         help='Which checkpoint to start averaging from')
-    parser.add_argument('-n', '--num_samples', type=int, default=4,
+    parser.add_argument('-n', '--n_samples', type=int, default=4,
                         help='Number of utterances to be generated')
     parser.add_argument('-b', '--batch_size', type=int, default=0,
                         help='Number of samples to generate at once per GPU')
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         # output_directory=train_config["output_directory"],
         ckpt_iter=args.ckpt_iter,
         ckpt_smooth=args.ckpt_smooth,
-        num_samples=args.num_samples,
+        n_samples=args.n_samples,
         batch_size=args.batch_size,
         name=args.name,
         diffusion_config=diffusion_config,
