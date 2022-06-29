@@ -34,15 +34,20 @@ import sys
 import time
 import subprocess
 import argparse
+import json
 import warnings
+from functools import partial
+import multiprocessing as mp
 warnings.filterwarnings("ignore")
 
 import torch
 
-from distributed_util import *
+from train import train
+
+# from distributed_util import *
 
 
-def main(config, stdout_dir, args_str, name, wandb_id, mel_path):
+def main(config, stdout_dir, args_str, name, wandb_id, mel_path, diffusion_config, model_config, dataset_config, dist_config, train_config):
     args_list = ['train.py']
     args_list += args_str.split(' ') if len(args_str) > 0 else []
 
@@ -61,16 +66,42 @@ def main(config, stdout_dir, args_str, name, wandb_id, mel_path):
 
     workers = []
 
-    for i in range(num_gpus):
-        args_list[2] = '--rank={}'.format(i) # Overwrite num_gpus
-        stdout = None if i == 0 else open(
-            os.path.join(stdout_dir, "GPU_{}.log".format(i)), "w")
-        print(args_list)
-        p = subprocess.Popen([str(sys.executable)]+args_list, stdout=stdout)
-        workers.append(p)
+    # for i in range(num_gpus):
+    #     args_list[2] = '--rank={}'.format(i) # Overwrite num_gpus
+    #     stdout = None if i == 0 else open(
+    #         os.path.join(stdout_dir, "GPU_{}.log".format(i)), "w")
+    #     print(args_list)
+    #     p = subprocess.Popen([str(sys.executable)]+args_list, stdout=stdout)
+    #     workers.append(p)
 
-    for p in workers:
-        p.wait()
+    train_fn = partial(
+        train,
+        num_gpus=num_gpus,
+        group_name=time.strftime("%Y%m%d-%H%M%S"),
+        wandb_id=wandb_id,
+        diffusion_config=diffusion_config,
+        model_config=model_config,
+        dataset_config=dataset_config,
+        dist_config=dist_config,
+        train_config=train_config,
+        name=name,
+        mel_path=mel_path,
+        **train_config,
+    )
+    mp.set_start_method("spawn")
+    processes = []
+    for i in range(num_gpus):
+        p = mp.Process(target=train_fn, args=(i,))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
+    # with Pool(num_gpus) as pool:
+    #     pool.map(train_fn, list(range(num_gpus)))
+        # train(num_gpus, i, time.strftime("%Y%m%d-%H%M%S"), wandb_id, diffusion_config, model_config, dataset_config, dist_config, train_config, name=name, mel_path=mel_path, **train_config)
+
+    # for p in workers:
+    #     p.wait()
 
 
 if __name__ == '__main__':
@@ -78,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', type=str,
                         help='JSON file for configuration')
     parser.add_argument('-s', '--stdout_dir', type=str, default="exp/",
-                        help='directory to save stoud logs')
+                        help='directory to save stdout logs')
     parser.add_argument('-a', '--args_str', type=str, default='',
                         help='double quoted string with space separated key value pairs')
     parser.add_argument('-w', '--wandb_id', type=str, default='')
@@ -86,4 +117,16 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--name', type=str, default='')
 
     args = parser.parse_args()
-    main(args.config, args.stdout_dir, args.args_str, args.name, args.wandb_id, args.mel_path)
+
+    # Parse configs
+    with open(args.config) as f:
+        data = f.read()
+    config = json.loads(data)
+    train_config            = config["train_config"]        # training parameters
+    dist_config             = config["dist_config"]         # to initialize distributed training
+    model_config          = config["model_config"]      # to define wavenet
+    diffusion_config        = config["diffusion_config"]    # basic hyperparameters
+    dataset_config         = config["dataset_config"]     # to load trainset
+    # diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
+
+    main(args.config, args.stdout_dir, args.args_str, args.name, args.wandb_id, args.mel_path, diffusion_config, model_config, dataset_config, dist_config, train_config)

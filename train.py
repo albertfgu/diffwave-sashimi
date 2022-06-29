@@ -22,10 +22,12 @@ from inference import generate
 from model import construct_model
 
 
-def train(num_gpus, rank, group_name, wandb_id,
+def train(rank, num_gpus, group_name, wandb_id,
         diffusion_config,
         model_config,
         dataset_config,
+        dist_config,
+        train_config,
         # checkpoint_directory,
         ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
         learning_rate, batch_size_per_gpu,
@@ -258,4 +260,4 @@ if __name__ == "__main__":
 
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
-    train(num_gpus, args.rank, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, name=args.name, mel_path=args.mel_path, **train_config)
+    train(args.rank, num_gpus, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, dist_config, name=args.name, mel_path=args.mel_path, **train_config)
