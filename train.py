@@ -167,7 +167,7 @@ def train(
                     assert mel_path is not None
                     mel_name="LJ001-0001"
                 samples = generate(
-                    n_samples, n_iter, name,
+                    rank, n_samples, n_iter, name,
                     diffusion_cfg, model_cfg, dataset_cfg,
                     mel_path=mel_path,
                     mel_name=mel_name,
