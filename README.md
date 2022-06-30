@@ -29,7 +29,7 @@ PRs are very welcome!
 A basic experiment can be run with `python train.py`.
 
 Configuration is managed by [Hydra](https://hydra.cc).
-Examples of different configs and configuring via command line are provided throughout this README
+Examples of different configs and configuring via command line are provided throughout this README.
 
 ### Multi-GPU training
 By default, all available GPUs are used (according to [`torch.cuda.device_count()`](https://pytorch.org/docs/stable/cuda.html#torch.cuda.device_count)).

@@ -34,21 +34,21 @@ def distributed_train(rank, num_gpus, group_name, cfg):
         )
 
     # Distributed running initialization
-    dist_config = cfg.pop("dist_config")
+    dist_cfg = cfg.pop("distributed")
     if num_gpus > 1:
-        init_distributed(rank, num_gpus, group_name, **dist_config)
+        init_distributed(rank, num_gpus, group_name, **dist_cfg)
 
     train(
         rank=rank, num_gpus=num_gpus,
-        diffusion_config=cfg.diffusion_config,
-        model_config=cfg.model_config,
-        dataset_config=cfg.dataset_config,
-        **cfg.train_config,
+        diffusion_cfg=cfg.diffusion,
+        model_cfg=cfg.model,
+        dataset_cfg=cfg.dataset,
+        **cfg.train,
     )
 
 def train(
     rank, num_gpus,
-    diffusion_config, model_config, dataset_config, # dist_config, wandb_config, # train_config,
+    diffusion_cfg, model_cfg, dataset_cfg, # dist_cfg, wandb_cfg, # train_cfg,
     ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
     learning_rate, batch_size_per_gpu,
     n_samples,
@@ -70,24 +70,24 @@ def train(
     mel_path (str):                 for vocoding, path to mel spectrograms (TODO generate these on the fly)
     """
 
-    local_path, checkpoint_directory = local_directory(name, model_config, diffusion_config, dataset_config, 'checkpoint')
+    local_path, checkpoint_directory = local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, 'checkpoint')
 
     # map diffusion hyperparameters to gpu
-    diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config, fast=False)  # dictionary of all diffusion hyperparameters
+    diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_cfg, fast=False)  # dictionary of all diffusion hyperparameters
 
     # load training data
-    if model_config['unconditional']:
-        trainloader = load_Speech_commands(path=dataset_config["data_path"],
+    if model_cfg['unconditional']:
+        trainloader = load_Speech_commands(path=dataset_cfg["data_path"],
                                            batch_size=batch_size_per_gpu,
                                            num_gpus=num_gpus)
     else:
-        trainloader = load_LJSpeech(dataset_config=dataset_config,
+        trainloader = load_LJSpeech(dataset_cfg=dataset_cfg,
                                     batch_size=batch_size_per_gpu,
                                     num_gpus=num_gpus)
     print('Data loaded')
 
     # predefine model
-    net = construct_model(model_config).cuda()
+    net = construct_model(model_cfg).cuda()
     print_size(net, verbose=False)
 
     # apply gradient all reduce
@@ -126,7 +126,7 @@ def train(
     while n_iter < n_iters + 1:
         epoch_loss = 0.
         for data in tqdm(trainloader, desc=f'Epoch {n_iter // len(trainloader)}'):
-            if model_config["unconditional"]:
+            if model_cfg["unconditional"]:
                 audio, _, _ = data
                 # load audio
                 audio = audio.cuda()
@@ -168,7 +168,7 @@ def train(
                 print('model at iteration %s is saved' % n_iter)
 
                 # Generate samples
-                if model_config["unconditional"]:
+                if model_cfg["unconditional"]:
                     mel_path = None
                     mel_name = None
                 else:
@@ -176,11 +176,11 @@ def train(
                     mel_name="LJ001-0001"
                 samples = generate(
                     n_samples, n_iter, name,
-                    diffusion_config, model_config, dataset_config,
+                    diffusion_cfg, model_cfg, dataset_cfg,
                     mel_path=mel_path,
                     mel_name=mel_name,
                 )
-                samples = [wandb.Audio(sample.squeeze().cpu(), sample_rate=dataset_config['sampling_rate']) for sample in samples]
+                samples = [wandb.Audio(sample.squeeze().cpu(), sample_rate=dataset_cfg['sampling_rate']) for sample in samples]
                 wandb.log(
                     {'inference/audio': samples},
                     step=n_iter,

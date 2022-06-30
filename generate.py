@@ -25,9 +25,9 @@ def generate(
         n_samples, # Samples per GPU
         ckpt_iter,
         name,
-        diffusion_config,
-        model_config,
-        dataset_config,
+        diffusion_cfg,
+        model_cfg,
+        dataset_cfg,
         batch_size=None,
         ckpt_smooth=-1,
         mel_path=None, mel_name="LJ001-0001",
@@ -46,13 +46,13 @@ def generate(
         print(f"rank {rank} {torch.cuda.device_count()} GPUs")
         torch.cuda.set_device(rank % torch.cuda.device_count())
 
-    local_path, output_directory = local_directory(name, model_config, diffusion_config, dataset_config, 'waveforms')
+    local_path, output_directory = local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, 'waveforms')
 
     # map diffusion hyperparameters to gpu
-    diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config, fast=True)  # dictionary of all diffusion hyperparameters
+    diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_cfg, fast=True)  # dictionary of all diffusion hyperparameters
 
     # predefine model
-    net = construct_model(model_config).cuda()
+    net = construct_model(model_cfg).cuda()
     print_size(net)
     net.eval()
 
@@ -94,10 +94,10 @@ def generate(
             ground_truth_mel_spectrogram = torch.load(ground_truth_mel_name).unsqueeze(0).cuda()
         except:
             raise Exception('No ground truth mel spectrogram found')
-        audio_length = ground_truth_mel_spectrogram.shape[-1] * dataset_config["hop_length"]
+        audio_length = ground_truth_mel_spectrogram.shape[-1] * dataset_cfg["hop_length"]
     else:
         # predefine audio shape
-        audio_length = dataset_config["segment_length"]  # 16000
+        audio_length = dataset_cfg["segment_length"]  # 16000
         ground_truth_mel_spectrogram = None
     print(f'begin generating audio of length {audio_length} | {n_samples} samples with batch size {batch_size}')
 
@@ -129,12 +129,12 @@ def generate(
     for i in range(n_samples):
         outfile = '{}k_{}.wav'.format(ckpt_iter // 1000, n_samples*rank + i)
         wavwrite(os.path.join(output_directory, outfile),
-                    dataset_config["sampling_rate"],
+                    dataset_cfg["sampling_rate"],
                     generated_audio[i].squeeze().cpu().numpy())
 
         # save audio to tensorboard
         # tb = SummaryWriter(os.path.join('exp', local_path, tensorboard_directory))
-        # tb.add_audio(tag=outfile, snd_tensor=generated_audio[i], sample_rate=dataset_config["sampling_rate"])
+        # tb.add_audio(tag=outfile, snd_tensor=generated_audio[i], sample_rate=dataset_cfg["sampling_rate"])
         # tb.close()
 
     print('saved generated samples at iteration %s' % ckpt_iter)
@@ -149,10 +149,10 @@ def main(cfg: DictConfig) -> None:
     num_gpus = torch.cuda.device_count()
     generate_fn = partial(
         generate,
-        diffusion_config=cfg.diffusion_config,
-        model_config=cfg.model_config,
-        dataset_config=cfg.dataset_config,
-        **cfg.generate_config,
+        diffusion_cfg=cfg.diffusion,
+        model_cfg=cfg.model,
+        dataset_cfg=cfg.dataset,
+        **cfg.generate,
     )
 
     if num_gpus <= 1:

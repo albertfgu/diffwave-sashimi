@@ -252,36 +252,36 @@ def training_loss(net, loss_fn, audio, diffusion_hyperparams, mel_spec=None):
     return loss_fn(epsilon_theta, z)
 
 
-def local_directory(name, model_config, diffusion_config, dataset_config, output_directory):
-    # tensorboard_directory = train_config['tensorboard_directory']
-    # ckpt_path = output_directory # train_config['output_directory']
+def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_directory):
+    # tensorboard_directory = train_cfg['tensorboard_directory']
+    # ckpt_path = output_directory # train_cfg['output_directory']
 
     # generate experiment (local) path
-    if model_config['sashimi']:
+    if model_cfg['sashimi']:
         model_name = "{}_d{}_n{}_pool_{}_expand{}_ff{}".format(
-            "unet" if model_config["unet"] else "snet",
-            model_config["d_model"],
-            model_config["n_layers"],
-            len(model_config["pool"]),
-            model_config["expand"],
-            model_config["ff"],
-            # model_config["channels"],
-            # diffusion_config["T"],
-            # diffusion_config["beta_T"],
+            "unet" if model_cfg["unet"] else "snet",
+            model_cfg["d_model"],
+            model_cfg["n_layers"],
+            len(model_cfg["pool"]),
+            model_cfg["expand"],
+            model_cfg["ff"],
+            # model_cfg["channels"],
+            # diffusion_cfg["T"],
+            # diffusion_cfg["beta_T"],
         )
     else:
         model_name = "wnet_h{}_d{}".format(
-            model_config["res_channels"],
-            model_config["num_res_layers"],
-            # diffusion_config["T"],
-            # diffusion_config["beta_T"],
+            model_cfg["res_channels"],
+            model_cfg["num_res_layers"],
+            # diffusion_cfg["T"],
+            # diffusion_cfg["beta_T"],
         )
-    diffusion_name = f"_T{diffusion_config['T']}_betaT{diffusion_config['beta_T']}"
-    if model_config["unconditional"]:
+    diffusion_name = f"_T{diffusion_cfg['T']}_betaT{diffusion_cfg['beta_T']}"
+    if model_cfg["unconditional"]:
         data_name = ""
     else:
-        data_name = f"_L{dataset_config['segment_length']}_hop{dataset_config['hop_length']}"
-    local_path = model_name + diffusion_name + data_name + f"_{'uncond' if model_config['unconditional'] else 'cond'}"
+        data_name = f"_L{dataset_cfg['segment_length']}_hop{dataset_cfg['hop_length']}"
+    local_path = model_name + diffusion_name + data_name + f"_{'uncond' if model_cfg['unconditional'] else 'cond'}"
 
     if not (name is None or name == ""):
         local_path = name + "_" + local_path
