@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from util import calc_diffusion_step_embedding
+from models.utils import calc_diffusion_step_embedding
 
 
 def swish(x):

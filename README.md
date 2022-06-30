@@ -22,11 +22,13 @@ These are some features that would be nice to add:
 - Mixed-precision training
 - Fast inference procedure from later versions of the DiffWave paper
 - Can add an option to allow original Tensorboard logging instead of WandB (code is still there, just commented out)
+- The different backbones (WaveNet and SaShiMi) can be consolidated more cleanly with the diffusion portions factored out
 PRs are very welcome!
 
 ## Usage
 
 A basic experiment can be run with `python train.py`.
+This default config is for SC09 unconditional generation.
 
 Configuration is managed by [Hydra](https://hydra.cc).
 Examples of different configs and configuring via command line are provided throughout this README.

@@ -16,14 +16,14 @@ from tqdm import tqdm
 
 from dataset_sc import load_Speech_commands
 from dataset_ljspeech import load_LJSpeech
-from util import rescale, find_max_epoch, print_size
-from util import training_loss, calc_diffusion_hyperparams
-from util import local_directory
+from utils import rescale, find_max_epoch, print_size
+from utils import training_loss, calc_diffusion_hyperparams
+from utils import local_directory
 
 from distributed_util import init_distributed, apply_gradient_allreduce, reduce_tensor
 from generate import generate
 
-from model import construct_model
+from models import construct_model
 
 def distributed_train(rank, num_gpus, group_name, cfg):
     # Initialize logger
@@ -198,7 +198,7 @@ def train(
         wandb.finish()
 
 
-@hydra.main(version_base=None, config_path="", config_name="config")
+@hydra.main(version_base=None, config_path="configs/", config_name="config")
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     OmegaConf.set_struct(cfg, False)  # Allow writing keys

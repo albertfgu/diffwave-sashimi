@@ -16,8 +16,8 @@ from omegaconf import DictConfig, OmegaConf
 from scipy.io.wavfile import write as wavwrite
 # from scipy.io.wavfile import read as wavread
 
-from model import construct_model
-from util import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams, local_directory, smooth_ckpt
+from models import construct_model
+from utils import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams, local_directory, smooth_ckpt
 
 @torch.no_grad()
 def generate(
@@ -141,7 +141,7 @@ def generate(
     return generated_audio
 
 
-@hydra.main(version_base=None, config_path="", config_name="config")
+@hydra.main(version_base=None, config_path="configs/", config_name="config")
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     OmegaConf.set_struct(cfg, False)  # Allow writing keys

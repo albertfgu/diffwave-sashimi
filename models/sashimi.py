@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from util import calc_diffusion_step_embedding
-from s4 import S4
+from models.utils import calc_diffusion_step_embedding
+from models.s4 import S4
 
 class TransposedLN(nn.Module):
     def __init__(self, d):

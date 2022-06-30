@@ -125,33 +125,6 @@ def std_normal(size):
     return torch.normal(0, 1, size=size).cuda()
 
 
-def calc_diffusion_step_embedding(diffusion_steps, diffusion_step_embed_dim_in):
-    """
-    Embed a diffusion step $t$ into a higher dimensional space
-    E.g. the embedding vector in the 128-dimensional space is
-    [sin(t * 10^(0*4/63)), ... , sin(t * 10^(63*4/63)), cos(t * 10^(0*4/63)), ... , cos(t * 10^(63*4/63))]
-
-    Parameters:
-    diffusion_steps (torch.long tensor, shape=(batchsize, 1)):
-                                diffusion steps for batch data
-    diffusion_step_embed_dim_in (int, default=128):
-                                dimensionality of the embedding space for discrete diffusion steps
-
-    Returns:
-    the embedding vectors (torch.tensor, shape=(batchsize, diffusion_step_embed_dim_in)):
-    """
-
-    assert diffusion_step_embed_dim_in % 2 == 0
-
-    half_dim = diffusion_step_embed_dim_in // 2
-    _embed = np.log(10000) / (half_dim - 1)
-    _embed = torch.exp(torch.arange(half_dim) * -_embed).cuda()
-    _embed = diffusion_steps * _embed
-    diffusion_step_embed = torch.cat((torch.sin(_embed),
-                                      torch.cos(_embed)), 1)
-
-    return diffusion_step_embed
-
 
 def calc_diffusion_hyperparams(T, beta_0, beta_T, beta=None, fast=False):
     """
@@ -183,11 +156,7 @@ def calc_diffusion_hyperparams(T, beta_0, beta_T, beta=None, fast=False):
 
     _dh = {}
     _dh["T"], _dh["Beta"], _dh["Alpha"], _dh["Alpha_bar"], _dh["Sigma"] = T, Beta.cuda(), Alpha.cuda(), Alpha_bar.cuda(), Sigma
-    diffusion_hyperparams = _dh
-    # for key in diffusion_hyperparams:
-    #     if key != "T":
-    #         diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda()
-    return diffusion_hyperparams
+    return _dh
 
 
 def sampling(net, size, diffusion_hyperparams, condition=None):
@@ -257,7 +226,8 @@ def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_director
     # ckpt_path = output_directory # train_cfg['output_directory']
 
     # generate experiment (local) path
-    if model_cfg['sashimi']:
+    # TODO should be controlled locally by each model class
+    if model_cfg["backbone"] == "sashimi":
         model_name = "{}_d{}_n{}_pool_{}_expand{}_ff{}".format(
             "unet" if model_cfg["unet"] else "snet",
             model_cfg["d_model"],

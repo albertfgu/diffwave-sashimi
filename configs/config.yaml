@@ -1,27 +1,31 @@
+defaults:
+  - _self_
+  - model: sashimi
+
 diffusion:
   T: 200
   beta_0: 0.0001
   beta_T: 0.02
   beta: null
 
-model:
-  in_channels: 1
-  out_channels: 1
-  diffusion_step_embed_dim_in: 128
-  diffusion_step_embed_dim_mid: 512
-  diffusion_step_embed_dim_out: 512
-  res_channels: 128
-  skip_channels: 256
-  num_res_layers: 30
-  dilation_cycle: 10
-  sashimi: true
-  unet: true
-  d_model: 64
-  n_layers: 6
-  pool: [4, 4]
-  expand: 2
-  ff: 2
-  unconditional: true
+# model:
+#   backbone: sashimi
+#   unconditional: true
+#   in_channels: 1
+#   out_channels: 1
+#   diffusion_step_embed_dim_in: 128
+#   diffusion_step_embed_dim_mid: 512
+#   diffusion_step_embed_dim_out: 512
+#   res_channels: 128
+#   skip_channels: 256
+#   num_res_layers: 30
+#   dilation_cycle: 10
+#   unet: true
+#   d_model: 64
+#   n_layers: 6
+#   pool: [4, 4]
+#   expand: 2
+#   ff: 2
 
 dataset:
   data_path: data/sc09
