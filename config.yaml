@@ -29,17 +29,19 @@ dataset_config:
   sampling_rate: 16000
 
 train_config:
+  # stdout_dir: exp/ # directory to save stdout logs
+  name: null # Name of experiment (prefix of experiment name)
   ckpt_iter: max
   iters_per_ckpt: 10000
   iters_per_logging: 100
   n_iters: 1000001
   learning_rate: 2e-4
   batch_size_per_gpu: 4
-  wandb_mode: disabled
   n_samples: 32 # Samples per GPU to generate per checkpoint
+  mel_path: null # Path to load spectrograms from for vocoding
 
 generate_config:
-  name: null # Name of experiment (prefix of experiment directory)
+  name: null # Name of experiment (prefix of experiment name)
   ckpt_iter: max # Which checkpoint to use; assign a number or "max"
   ckpt_smooth: -1 # Which checkpoint to start averaging from (experimental)
   n_samples: 16 # Number of utterances to be generated (per GPU)
@@ -54,4 +56,6 @@ wandb:
   mode: disabled
   project: hippo
   entity: null
+  id: null # Set to string to resume logging from run
+  job_type: training
 

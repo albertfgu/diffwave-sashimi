@@ -41,6 +41,9 @@ import multiprocessing as mp
 warnings.filterwarnings("ignore")
 
 import torch
+import hydra
+import wandb
+from omegaconf import DictConfig, OmegaConf
 
 from train import train
 
@@ -64,7 +67,7 @@ def main(config, stdout_dir, args_str, name, wandb_id, mel_path, diffusion_confi
         os.makedirs(stdout_dir)
         os.chmod(stdout_dir, 0o775)
 
-    workers = []
+    # workers = []
 
     # for i in range(num_gpus):
     #     args_list[2] = '--rank={}'.format(i) # Overwrite num_gpus
@@ -104,29 +107,75 @@ def main(config, stdout_dir, args_str, name, wandb_id, mel_path, diffusion_confi
     #     p.wait()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str,
-                        help='JSON file for configuration')
-    parser.add_argument('-s', '--stdout_dir', type=str, default="exp/",
-                        help='directory to save stdout logs')
-    parser.add_argument('-a', '--args_str', type=str, default='',
-                        help='double quoted string with space separated key value pairs')
-    parser.add_argument('-w', '--wandb_id', type=str, default='')
-    parser.add_argument('-m', '--mel_path', type=str, default='')
-    parser.add_argument('-n', '--name', type=str, default='')
+@hydra.main(version_base=None, config_path="", config_name="config")
+def main(cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg))
+    OmegaConf.set_struct(cfg, False)  # Allow writing keys
 
-    args = parser.parse_args()
+# if __name__ == '__main__':
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('-c', '--config', type=str,
+    #                     help='JSON file for configuration')
+    # parser.add_argument('-s', '--stdout_dir', type=str, default="exp/",
+    #                     help='directory to save stdout logs')
+    # parser.add_argument('-a', '--args_str', type=str, default='',
+    #                     help='double quoted string with space separated key value pairs')
+    # parser.add_argument('-w', '--wandb_id', type=str, default='')
+    # parser.add_argument('-m', '--mel_path', type=str, default='')
+    # parser.add_argument('-n', '--name', type=str, default='')
+
+    # args = parser.parse_args()
 
     # Parse configs
-    with open(args.config) as f:
-        data = f.read()
-    config = json.loads(data)
-    train_config            = config["train_config"]        # training parameters
-    dist_config             = config["dist_config"]         # to initialize distributed training
-    model_config          = config["model_config"]      # to define wavenet
-    diffusion_config        = config["diffusion_config"]    # basic hyperparameters
-    dataset_config         = config["dataset_config"]     # to load trainset
+    # with open(args.config) as f:
+    #     data = f.read()
+    # config = json.loads(data)
+    # train_config            = config["train_config"]        # training parameters
+    # dist_config             = config["dist_config"]         # to initialize distributed training
+    # model_config          = config["model_config"]      # to define wavenet
+    # diffusion_config        = config["diffusion_config"]    # basic hyperparameters
+    # dataset_config         = config["dataset_config"]     # to load trainset
     # diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
 
-    main(args.config, args.stdout_dir, args.args_str, args.name, args.wandb_id, args.mel_path, diffusion_config, model_config, dataset_config, dist_config, train_config)
+    # main(args.config, args.stdout_dir, args.args_str, args.name, args.wandb_id, args.mel_path, diffusion_config, model_config, dataset_config, dist_config, train_config)
+
+    if cfg.wandb is not None:
+        wandb_cfg = cfg.pop("wandb")
+        wandb.init(
+            **wandb_cfg, config=OmegaConf.to_container(cfg, resolve=True)
+        )
+
+    if not os.path.isdir("exp/"):
+        os.makedirs("exp/")
+        os.chmod("exp/", 0o775)
+
+    num_gpus = torch.cuda.device_count()
+    train_fn = partial(
+        train,
+        num_gpus=num_gpus,
+        group_name=time.strftime("%Y%m%d-%H%M%S"),
+        # wandb_id=wandb_id,
+        diffusion_config=cfg.diffusion_config,
+        model_config=cfg.model_config,
+        dataset_config=cfg.dataset_config,
+        dist_config=cfg.dist_config,
+        # train_config=train_config,
+        # name=name,
+        # mel_path=mel_path,
+        **cfg.train_config,
+    )
+
+    if num_gpus <= 1:
+        generate_fn(0)
+    else:
+        mp.set_start_method("spawn")
+        processes = []
+        for i in range(num_gpus):
+            p = mp.Process(target=train_fn, args=(i,))
+            p.start()
+            processes.append(p)
+        for p in processes:
+            p.join()
+
+if __name__ == "__main__":
+    main()

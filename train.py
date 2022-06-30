@@ -1,12 +1,21 @@
 import os
-import argparse
-import json
+# import sys
+import time
+# import subprocess
+# import argparse
+# import json
+# import warnings
+from functools import partial
+import multiprocessing as mp
+# warnings.filterwarnings("ignore")
 
 import numpy as np
 import torch
 import torch.nn as nn
 # from torch.utils.tensorboard import SummaryWriter
+import hydra
 import wandb
+from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from dataset_sc import load_Speech_commands
@@ -16,32 +25,26 @@ from util import training_loss, calc_diffusion_hyperparams
 from util import local_directory
 
 from distributed_util import init_distributed, apply_gradient_allreduce, reduce_tensor
-from inference import generate
+from generate import generate
 
 # from WaveNet import WaveNet_Speech_Commands as WaveNet
 from model import construct_model
 
 
-def train(rank, num_gpus, group_name, wandb_id,
-        diffusion_config,
-        model_config,
-        dataset_config,
-        dist_config,
-        train_config,
-        # checkpoint_directory,
-        ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
-        learning_rate, batch_size_per_gpu,
-        wandb_mode,
-        n_samples,
-        name=None,
-        mel_path=None,
-    ):
+def train(
+    rank, num_gpus, group_name,
+    diffusion_config, model_config, dataset_config, dist_config, # train_config,
+    ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
+    learning_rate, batch_size_per_gpu,
+    n_samples,
+    name=None,
+    mel_path=None,
+):
     """
     Train the WaveNet model on the Speech Commands dataset
 
     Parameters:
     num_gpus, rank, group_name:     parameters for distributed training
-    checkpoint_directory (str):         save model checkpoints to this path
     ckpt_iter (int or 'max'):       the pretrained checkpoint to be loaded;
                                     automitically selects the maximum iteration if 'max' is selected
     n_iters (int):                  number of iterations to train, default is 1M
@@ -50,6 +53,9 @@ def train(rank, num_gpus, group_name, wandb_id,
     iters_per_logging (int):        number of iterations to save training log and compute validation loss, default is 100
     learning_rate (float):          learning rate
     batch_size_per_gpu (int):       batchsize per gpu, default is 2 so total batchsize is 16 with 8 gpus
+    n_samples (int):                audio samples to generate and log per checkpoint
+    name (str):                     prefix in front of experiment name
+    mel_path (str):                 for vocoding, path to mel spectrograms (TODO generate these on the fly)
     """
 
     # # generate experiment (local) path
@@ -57,18 +63,18 @@ def train(rank, num_gpus, group_name, wandb_id,
     #                                        diffusion_config["T"],
     #                                        diffusion_config["beta_T"])
     # Create tensorboard logger.
-    if rank == 0:
-        # tb = SummaryWriter(os.path.join('exp', local_path, tensorboard_directory))
-        cfg = {
-            'model': model_config,
-            'train': train_config,
-            'diffusion': diffusion_config,
-        }
-        wandb_id = None if len(wandb_id) == 0 else wandb_id
-        wandb.init(
-            project="hippo", job_type='training', mode=wandb_mode, id=wandb_id,
-            config=cfg,
-        )
+    # if rank == 0:
+    #     # tb = SummaryWriter(os.path.join('exp', local_path, tensorboard_directory))
+    #     cfg = {
+    #         'model': model_config,
+    #         'train': train_config,
+    #         'diffusion': diffusion_config,
+    #     }
+    #     wandb_id = None if len(wandb_id) == 0 else wandb_id
+    #     wandb.init(
+    #         # project="hippo", job_type='training', mode=wandb_mode, id=wandb_id,
+    #         config=cfg,
+    #     )
 
     # distributed running initialization
     if num_gpus > 1:
@@ -261,3 +267,49 @@ def train(rank, num_gpus, group_name, wandb_id,
 #     torch.backends.cudnn.enabled = True
 #     torch.backends.cudnn.benchmark = True
 #     train(args.rank, num_gpus, args.group_name, args.wandb_id, diffusion_config, model_config, dataset_config, dist_config, name=args.name, mel_path=args.mel_path, **train_config)
+
+@hydra.main(version_base=None, config_path="", config_name="config")
+def main(cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg))
+    OmegaConf.set_struct(cfg, False)  # Allow writing keys
+
+    if cfg.wandb is not None:
+        wandb_cfg = cfg.pop("wandb")
+        wandb.init(
+            **wandb_cfg, config=OmegaConf.to_container(cfg, resolve=True)
+        )
+
+    if not os.path.isdir("exp/"):
+        os.makedirs("exp/")
+        os.chmod("exp/", 0o775)
+
+    num_gpus = torch.cuda.device_count()
+    train_fn = partial(
+        train,
+        num_gpus=num_gpus,
+        group_name=time.strftime("%Y%m%d-%H%M%S"),
+        # wandb_id=wandb_id,
+        diffusion_config=cfg.diffusion_config,
+        model_config=cfg.model_config,
+        dataset_config=cfg.dataset_config,
+        dist_config=cfg.dist_config,
+        # train_config=train_config,
+        # name=name,
+        # mel_path=mel_path,
+        **cfg.train_config,
+    )
+
+    if num_gpus <= 1:
+        generate_fn(0)
+    else:
+        mp.set_start_method("spawn")
+        processes = []
+        for i in range(num_gpus):
+            p = mp.Process(target=train_fn, args=(i,))
+            p.start()
+            processes.append(p)
+        for p in processes:
+            p.join()
+
+if __name__ == "__main__":
+    main()

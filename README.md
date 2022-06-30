@@ -17,6 +17,7 @@ These are some features that would be nice to add:
 - Move from the original JSON based configuration system to [Hydra](https://hydra.cc)
 - Generate spectrograms on the fly based on the config instead of requiring a [separate step](#vocoding)
 - Incorporate latest SaShiMi standalone file; currently this reimplements the architecture using a model predating V2 of the S4 standalone
+- Can add an option to allow original Tensorboard logging (code is still there, just commented out) instead of WandB
 PRs are very welcome!
 
 ## Usage
