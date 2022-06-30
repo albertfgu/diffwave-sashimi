@@ -1,38 +1,6 @@
 defaults:
   - _self_
-  - model: sashimi
-  - dataset: sc09
-
-diffusion:
-  T: 200
-  beta_0: 0.0001
-  beta_T: 0.02
-  beta: null
-
-# model:
-#   backbone: sashimi
-#   unconditional: true
-#   in_channels: 1
-#   out_channels: 1
-#   diffusion_step_embed_dim_in: 128
-#   diffusion_step_embed_dim_mid: 512
-#   diffusion_step_embed_dim_out: 512
-#   res_channels: 128
-#   skip_channels: 256
-#   num_res_layers: 30
-#   dilation_cycle: 10
-#   unet: true
-#   d_model: 64
-#   n_layers: 6
-#   pool: [4, 4]
-#   expand: 2
-#   ff: 2
-
-# dataset:
-#   name: sc09
-#   data_path: data/sc09
-#   segment_length: 16000
-#   sampling_rate: 16000
+  - experiment: sc09
 
 train: # Not used in generate.py
   # stdout_dir: exp/ # directory to save stdout logs
@@ -43,7 +11,7 @@ train: # Not used in generate.py
   n_iters: 1000001
   learning_rate: 2e-4
   batch_size_per_gpu: 4
-  n_samples: 32 # Samples per GPU to generate per checkpoint
+  n_samples: 16 # Samples per GPU to generate per checkpoint
   mel_path: null # Path to load spectrograms from for vocoding
 
 generate: # Not used in train.py
@@ -63,4 +31,3 @@ wandb:
   entity: null
   id: null # Set to string to resume logging from run
   job_type: training
-

@@ -6,7 +6,7 @@ diffusion_step_embed_dim_in: 128
 diffusion_step_embed_dim_mid: 512
 diffusion_step_embed_dim_out: 512
 unet: true
-d_model: 128
+d_model: 64
 n_layers: 6
 pool: [4, 4]
 expand: 2

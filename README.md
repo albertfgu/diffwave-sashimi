@@ -132,24 +132,42 @@ Run the same training script, with the additional command argument pointing to t
 # Pretrained Models
 
 The branch `git checkout checkpoints` is provided for the code used in the checkpoints.
-**This branch is only for reproducing results from the ICML 2022 paper - please do not report train-from-scratch results from this code.**
+**This branch is meant only for reproducing generated samples from the ICML 2022 paper - please do not attempt train-from-scratch results from this code.**
 Reasons are explained below.
+
+### Checkpoints
+
+Install [Git LFS](https://git-lfs.github.com/) and `git lfs pull` to download the checkpoints.
+
+### Samples
+Pre-generated samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
+
+The below four models correspond to "sashimi-diffwave", "sashimi-diffwave-small", "diffwave", and "diffwave-small" respectively.
+
+Command lines are also provided to reproduce these samples (up to random seed).
+
 
 ## SaShiMi
 
 The version of S4 used in these experiments is an outdated version of S4 that predates V2 (February 2022) of the [S4 repository](https://github.com/HazyResearch/state-spaces) (currently on V3 as of July 2022).
 
-### SaShiMi+DiffWave large
+### SaShiMi+DiffWave
 
 Experiment folder: `exp/unet_d128_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
-Train from scratch: `python distributed_train.py -c config_sashimi_large.json`
-Resume training: `python distributed_train.py -c config_sashimi_large_decay.json`
+Train from scratch: `python train.py model=sashimi train.ckpt_iter=-1`
+Resume training: `python train.py model=sashimi train.ckpt_iter=max train.learning_rate=1e-4`
 (as described in the paper, this model used a manual learning rate decay after 500k steps)
 
-To resume training, download the checkpoint into `<experiment_folder>/checkpoints/`...
+Generation examples:
+`python generate.py model=sashimi` (Best model)
+`python generate.py model=sashimi generate.ckpt_iter=500000` (Earlier model)
+
+`python generate.py generate.n_samples=256 generate.batch_size=128` (Generate 2048 total samples with largest batch that fits on an A100; used for evaluation metrics in the paper)
 
 ### SaShiMi+DiffWave small
 Experiment folder: `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
+Train: `python train.py model=sashimi model.d_model=64 train.n_samples=32` (since generation is faster, you can increase the logged samples per epoch)
+Generate: `python generate.py model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256`
 
 ## WaveNet
 
@@ -160,14 +178,15 @@ These two lines are fixed in the main branch of this repo.
 However, for some reason when models are *trained using the wrong version* and *loaded using the correct version*,
 the model runs fine but produces inconsistent outputs, even in inference mode (i.e. generation produces static noise).
 So this branch for reproducing the checkpoints uses the incorrect version of these two lines.
+This allows generating from the model, but may not train in some environments.
 **If anyone knows why this happens, I would love to know! Shoot me an email or file an Issue!**
 
 
-### (WaveNet)+DiffWave large
+### (WaveNet)+DiffWave
 Experiment folder: `exp/wnet_h256_d36_T200_betaT0.02_uncond/`
-Config: `config_wavenet_large.json`
+Usage: `python <train|generate>.py model=wavenet`
 
-Notes:
+More Notes:
 The fully trained model (1000000 steps) is the original checkpoint from the original repo philsyn/DiffWave-unconditional
 The checkpoint at 500000 steps is our version trained from scratch.
 These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`.
@@ -175,26 +194,8 @@ I don't remember if I changed anything in the code to cause this; perhaps it cou
 
 ### (WaveNet)+DiffWave small
 Experiment folder: `exp/wnet_h128_d30_T200_betaT0.02_uncond/`
+Usage: `python <train|generate>.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10` or equivalently `python <train|generate>.py model=wavenet_small`
 
-Generate: `python distributed_inference.py -c config_wavenet_small.json -n 16 -b 16 --ckpt_iter max`
-
-### Checkpoints
-
-`git lfs pull`
-
-### Samples
-Samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
-
-The above four models correspond to "sashimi-diffwave", "sashimi-diffwave-small", "diffwave", and "diffwave-small" respectively.
-
-### Unconditional
-- [model](https://github.com/philsyn/DiffWave-unconditional/tree/master/exp/ch256_T200_betaT0.02/logs/checkpoint)
-- [samples](https://github.com/philsyn/DiffWave-unconditional/tree/master/exp/ch256_T200_betaT0.02/speeches)
-
-config_sashimi_large.json
-Note that the learning rate in this model is 1e-4 because it was decayed by 0.5 at step 500k (see note in paper)
-
-Samples: https://huggingface.co/krandiash/sashimi-release/tree/main/samples
 
 ### Conditional
 - [channel=64 model](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch64_T50_betaT0.05/logs/checkpoint)

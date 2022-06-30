@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - /model: sashimi
+  - /dataset: sc09
+
+diffusion:
+  T: 200
+  beta_0: 0.0001
+  beta_T: 0.02
+  beta: null
