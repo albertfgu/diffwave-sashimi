@@ -1093,6 +1093,7 @@ class S4(nn.Module):
         if l_max is not None and stride > 1:
             assert l_max % stride == 0
             l_max = l_max // self.stride
+        self.L = l_max
         self.cache = cache
         self.weight_decay = weight_decay
         self.transposed = transposed
@@ -1171,7 +1172,7 @@ class S4(nn.Module):
             assert self.stride == 1, "Striding not supported with states"
             k, k_state = self.kernel(state=state, L=L)
         else:
-            k = self.kernel(L=L)
+            k = self.kernel(L=self.L)
 
         # Stride the filter if needed
         if self.stride > 1:
@@ -1179,7 +1180,7 @@ class S4(nn.Module):
             k = F.pad(k.unsqueeze(-1), (0, self.stride-1)) # (H, L/S, S)
             k = rearrange(k, '... h s -> ... (h s)') # (H, L)
         else:
-            k = k[..., :L]
+            k = k[..., :self.L]
 
         # Convolution
 
@@ -1196,7 +1197,7 @@ class S4(nn.Module):
 
         # bidirectional attempt 2
         if self.bidirectional:
-            k2 = self.kernel2(L=L)[..., :L]
+            k2 = self.kernel2(L=self.L)[..., :self.L]
             k2_f = torch.fft.rfft(k2.flip(-1), n=2*L)
             y2_f = k2_f * u_f
             y2 = torch.fft.irfft(y2_f, n=2*L)[..., L-1:-1]
