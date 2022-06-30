@@ -11,3 +11,4 @@ n_layers: 6
 pool: [4, 4]
 expand: 2
 ff: 2
+L: ${dataset.segment_length} # Truncates infinite kernel to length of training inputs

@@ -20,6 +20,8 @@ generate: # Not used in train.py
   ckpt_smooth: -1 # Which checkpoint to start averaging from (experimental)
   n_samples: 16 # Number of utterances to be generated (per GPU)
   batch_size: null # Number of samples to generate at once per GPU. null means max (equal to samples_per_gpu)
+  mel_path: null
+  mel_name: null
 
 distributed:
   dist_backend: nccl

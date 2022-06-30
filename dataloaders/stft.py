@@ -5,8 +5,9 @@ Implementation taken from NVIDIA's tacotron2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from librosa.filters import mel as librosa_mel_fn
-import librosa.util as librosa_util
+import librosa
+# from librosa.filters import mel as librosa_mel_fn
+# import librosa.util as librosa.util
 from scipy.signal import get_window
 # from librosa.util import pad_center, tiny
 
@@ -53,8 +54,8 @@ def window_sumsquare(window, n_frames, hop_length=200, win_length=800,
 
     # Compute the squared window at the desired length
     win_sq = get_window(window, win_length, fftbins=True)
-    win_sq = librosa_util.normalize(win_sq, norm=norm)**2
-    win_sq = librosa_util.pad_center(win_sq, n_fft)
+    win_sq = librosa.util.normalize(win_sq, norm=norm)**2
+    win_sq = librosa.util.pad_center(win_sq, n_fft)
 
     # Fill the envelope
     for i in range(n_frames):
@@ -121,7 +122,7 @@ class STFT(torch.nn.Module):
             assert(filter_length >= win_length)
             # get window and zero center pad it to filter_length
             fft_window = get_window(window, win_length, fftbins=True)
-            fft_window = librosa_util.pad_center(fft_window, filter_length)
+            fft_window = librosa.util.pad_center(fft_window, size=filter_length)
             fft_window = torch.from_numpy(fft_window).float()
 
             # window the bases
@@ -178,7 +179,7 @@ class STFT(torch.nn.Module):
                 dtype=np.float32)
             # remove modulation effects
             approx_nonzero_indices = torch.from_numpy(
-                np.where(window_sum > librosa_util.tiny(window_sum))[0])
+                np.where(window_sum > librosa.util.tiny(window_sum))[0])
             window_sum = torch.autograd.Variable(
                 torch.from_numpy(window_sum), requires_grad=False)
             window_sum = window_sum.cuda() if magnitude.is_cuda else window_sum
@@ -205,8 +206,13 @@ class TacotronSTFT(torch.nn.Module):
         self.n_mel_channels = n_mel_channels
         self.sampling_rate = sampling_rate
         self.stft_fn = STFT(filter_length, hop_length, win_length)
-        mel_basis = librosa_mel_fn(
-            sampling_rate, filter_length, n_mel_channels, mel_fmin, mel_fmax)
+        mel_basis = librosa.filters.mel(
+            sr=sampling_rate,
+            n_fft=filter_length,
+            n_mels=n_mel_channels,
+            fmin=mel_fmin,
+            fmax=mel_fmax,
+        )
         mel_basis = torch.from_numpy(mel_basis).float()
         self.register_buffer('mel_basis', mel_basis)
 

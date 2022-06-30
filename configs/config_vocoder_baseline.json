@@ -35,7 +35,7 @@
         "n_samples": 2
     },
     "dataset_config": {
-        "data_path": "../data/ljspeech/LJSpeech-1.1/wavs",
+        "data_path": "data/LJSpeech-1.1/wavs",
         "segment_length": 16000,
         "sampling_rate": 22050,
         "valid": false,

@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - /model: sashimi
+  - /dataset: ljspeech
+
+diffusion:
+  T: 50
+  beta_0: 0.0001
+  beta_T: 0.05
+  beta: null
+
+train:
+  batch_size_per_gpu: 2
+  n_samples: 2
+
+generate:
+  mel_path: mel256
+  mel_name: LJ001-0001
+
+model:
+  unconditional: false
+  mel_upsample: [16, 16]
