@@ -14,11 +14,10 @@ import wandb
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
-from dataset_sc import load_Speech_commands
-from dataset_ljspeech import load_LJSpeech
-from utils import rescale, find_max_epoch, print_size
-from utils import training_loss, calc_diffusion_hyperparams
-from utils import local_directory
+# from dataset_sc import load_Speech_commands
+# from dataset_ljspeech import load_LJSpeech
+from dataloaders import dataloader
+from utils import find_max_epoch, print_size, calc_diffusion_hyperparams, local_directory
 
 from distributed_util import init_distributed, apply_gradient_allreduce, reduce_tensor
 from generate import generate
@@ -76,14 +75,7 @@ def train(
     diffusion_hyperparams   = calc_diffusion_hyperparams(**diffusion_cfg, fast=False)  # dictionary of all diffusion hyperparameters
 
     # load training data
-    if model_cfg['unconditional']:
-        trainloader = load_Speech_commands(path=dataset_cfg["data_path"],
-                                           batch_size=batch_size_per_gpu,
-                                           num_gpus=num_gpus)
-    else:
-        trainloader = load_LJSpeech(dataset_cfg=dataset_cfg,
-                                    batch_size=batch_size_per_gpu,
-                                    num_gpus=num_gpus)
+    trainloader = dataloader(dataset_cfg, batch_size=batch_size_per_gpu, num_gpus=num_gpus, unconditional=model_cfg.unconditional)
     print('Data loaded')
 
     # predefine model
@@ -196,6 +188,33 @@ def train(
     if rank == 0:
         # tb.close()
         wandb.finish()
+
+def training_loss(net, loss_fn, audio, diffusion_hyperparams, mel_spec=None):
+    """
+    Compute the training loss of epsilon and epsilon_theta
+
+    Parameters:
+    net (torch network):            the wavenet model
+    loss_fn (torch loss function):  the loss function, default is nn.MSELoss()
+    X (torch.tensor):               training data, shape=(batchsize, 1, length of audio)
+    diffusion_hyperparams (dict):   dictionary of diffusion hyperparameters returned by calc_diffusion_hyperparams
+                                    note, the tensors need to be cuda tensors
+
+    Returns:
+    training loss
+    """
+
+    _dh = diffusion_hyperparams
+    T, Alpha_bar = _dh["T"], _dh["Alpha_bar"]
+
+    # audio = X
+    B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
+    diffusion_steps = torch.randint(T, size=(B,1,1)).cuda()  # randomly sample diffusion steps from 1~T
+    z = torch.normal(0, 1, size=audio.shape).cuda()
+    transformed_X = torch.sqrt(Alpha_bar[diffusion_steps]) * audio + torch.sqrt(1-Alpha_bar[diffusion_steps]) * z  # compute x_t from q(x_t|x_0)
+    epsilon_theta = net((transformed_X, diffusion_steps.view(B,1),), mel_spec=mel_spec)  # predict \epsilon according to \epsilon_\theta
+    return loss_fn(epsilon_theta, z)
+
 
 
 @hydra.main(version_base=None, config_path="configs/", config_name="config")

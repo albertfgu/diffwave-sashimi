@@ -43,14 +43,14 @@ def load_speechcommands_item(filepath: str, path: str):
     waveform, sample_rate = torchaudio.load(filepath)
     return (fix_length(waveform, length=16000), sample_rate, label)
 
-class SPEECHCOMMANDS(Dataset):
+class SpeechCommands(Dataset):
     """
     Create a Dataset for Speech Commands. Each item is a tuple of the form:
     waveform, sample_rate, label
     """
 
-    def __init__(self, root: str, folder_in_archive: str):
-        self._path = os.path.join(root, folder_in_archive)
+    def __init__(self, path: str):
+        self._path = path # os.path.join(root, folder_in_archive)
         # walker = walk_files(self._path, suffix=".wav", prefix=True)
         walker = sorted(str(p) for p in Path(self._path).glob('**/*.wav'))
         walker = filter(lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker)
@@ -62,21 +62,3 @@ class SPEECHCOMMANDS(Dataset):
 
     def __len__(self) -> int:
         return len(self._walker)
-
-def load_Speech_commands(path, batch_size=4, num_gpus=1):
-    """
-    Load speech commands dataset
-    """
-    Speech_commands_dataset = SPEECHCOMMANDS(root=path, folder_in_archive='')
-
-    # distributed sampler
-    train_sampler = DistributedSampler(Speech_commands_dataset) if num_gpus > 1 else None
-
-    trainloader = torch.utils.data.DataLoader(Speech_commands_dataset,
-                                              batch_size=batch_size,
-                                              sampler=train_sampler,
-                                              num_workers=4,
-                                              pin_memory=False,
-                                              drop_last=True)
-    return trainloader
-

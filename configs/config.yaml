@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - model: sashimi
+  - dataset: sc09
 
 diffusion:
   T: 200
@@ -27,10 +28,11 @@ diffusion:
 #   expand: 2
 #   ff: 2
 
-dataset:
-  data_path: data/sc09
-  segment_length: 16000
-  sampling_rate: 16000
+# dataset:
+#   name: sc09
+#   data_path: data/sc09
+#   segment_length: 16000
+#   sampling_rate: 16000
 
 train: # Not used in generate.py
   # stdout_dir: exp/ # directory to save stdout logs

@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import torch
-from tqdm import tqdm
 
 def flatten(v):
     """
@@ -72,30 +71,6 @@ def smooth_ckpt(path, min_ckpt, max_ckpt, alpha=None):
             raise Exception(f'No valid model found at iteration {it}, path {model_path}')
     return state_dict
 
-def smooth_dict(d, d0, n=None, alpha=None):
-    """ Smooth with arithmetic average (if n not None) or geometric average (if alpha not None) """
-    assert int(n is None) + int(alpha is None) == 1
-    if d is None:
-        assert n is None or n == 0 # must be first iteration
-        return d0
-
-    if n is not None:
-        avg_fn = lambda x, y: (x * n + y) / (n+1)
-    else:
-        avg_fn = lambda x, y: alpha * x + (1. - alpha) * y
-    return _bin_op_dict(d, d0, avg_fn)
-
-def _bin_op_dict(d0, d1, op):
-    """ Apply binary operator recursively to two dictionaries with matching keys """
-    if isinstance(d0, dict) and isinstance(d1, dict):
-        assert d0.keys() == d1.keys(), "Dictionaries must hvae matching keys"
-        return {
-            k: _bin_op_dict(d0[k], d1[k], op) for k in d0.keys()
-        }
-    elif not isinstance(d0, dict) and not isinstance(d1, dict):
-        return op(d0, d1)
-    else: raise Exception("Dictionaries must match keys")
-
 
 def print_size(net, verbose=False):
     """
@@ -114,111 +89,6 @@ def print_size(net, verbose=False):
         print("{} Parameters: {:.6f}M".format(
             net.__class__.__name__, params / 1e6), flush=True)
 
-
-# Utilities for diffusion models
-
-def std_normal(size):
-    """
-    Generate the standard Gaussian variable of a certain size
-    """
-
-    return torch.normal(0, 1, size=size).cuda()
-
-
-
-def calc_diffusion_hyperparams(T, beta_0, beta_T, beta=None, fast=False):
-    """
-    Compute diffusion process hyperparameters
-
-    Parameters:
-    T (int):                    number of diffusion steps
-    beta_0 and beta_T (float):  beta schedule start/end value,
-                                where any beta_t in the middle is linearly interpolated
-
-    Returns:
-    a dictionary of diffusion hyperparameters including:
-        T (int), Beta/Alpha/Alpha_bar/Sigma (torch.tensor on cpu, shape=(T, ))
-        These cpu tensors are changed to cuda tensors on each individual gpu
-    """
-
-    if fast and beta is not None:
-        Beta = torch.tensor(beta)
-        T = len(beta)
-    else:
-        Beta = torch.linspace(beta_0, beta_T, T)
-    Alpha = 1 - Beta
-    Alpha_bar = Alpha + 0
-    Beta_tilde = Beta + 0
-    for t in range(1, T):
-        Alpha_bar[t] *= Alpha_bar[t-1]  # \bar{\alpha}_t = \prod_{s=1}^t \alpha_s
-        Beta_tilde[t] *= (1-Alpha_bar[t-1]) / (1-Alpha_bar[t])  # \tilde{\beta}_t = \beta_t * (1-\bar{\alpha}_{t-1}) / (1-\bar{\alpha}_t)
-    Sigma = torch.sqrt(Beta_tilde)  # \sigma_t^2  = \tilde{\beta}_t
-
-    _dh = {}
-    _dh["T"], _dh["Beta"], _dh["Alpha"], _dh["Alpha_bar"], _dh["Sigma"] = T, Beta.cuda(), Alpha.cuda(), Alpha_bar.cuda(), Sigma
-    return _dh
-
-
-def sampling(net, size, diffusion_hyperparams, condition=None):
-    """
-    Perform the complete sampling step according to p(x_0|x_T) = \prod_{t=1}^T p_{\theta}(x_{t-1}|x_t)
-
-    Parameters:
-    net (torch network):            the wavenet model
-    size (tuple):                   size of tensor to be generated,
-                                    usually is (number of audios to generate, channels=1, length of audio)
-    diffusion_hyperparams (dict):   dictionary of diffusion hyperparameters returned by calc_diffusion_hyperparams
-                                    note, the tensors need to be cuda tensors
-
-    Returns:
-    the generated audio(s) in torch.tensor, shape=size
-    """
-
-    _dh = diffusion_hyperparams
-    T, Alpha, Alpha_bar, Sigma = _dh["T"], _dh["Alpha"], _dh["Alpha_bar"], _dh["Sigma"]
-    assert len(Alpha) == T
-    assert len(Alpha_bar) == T
-    assert len(Sigma) == T
-    assert len(size) == 3
-
-    print('begin sampling, total number of reverse steps = %s' % T)
-
-    x = std_normal(size)
-    with torch.no_grad():
-        for t in tqdm(range(T-1, -1, -1)):
-            diffusion_steps = (t * torch.ones((size[0], 1))).cuda()  # use the corresponding reverse step
-            epsilon_theta = net((x, diffusion_steps,), mel_spec=condition)  # predict \epsilon according to \epsilon_\theta
-            x = (x - (1-Alpha[t])/torch.sqrt(1-Alpha_bar[t]) * epsilon_theta) / torch.sqrt(Alpha[t])  # update x_{t-1} to \mu_\theta(x_t)
-            if t > 0:
-                x = x + Sigma[t] * std_normal(size)  # add the variance term to x_{t-1}
-    return x
-
-
-def training_loss(net, loss_fn, audio, diffusion_hyperparams, mel_spec=None):
-    """
-    Compute the training loss of epsilon and epsilon_theta
-
-    Parameters:
-    net (torch network):            the wavenet model
-    loss_fn (torch loss function):  the loss function, default is nn.MSELoss()
-    X (torch.tensor):               training data, shape=(batchsize, 1, length of audio)
-    diffusion_hyperparams (dict):   dictionary of diffusion hyperparameters returned by calc_diffusion_hyperparams
-                                    note, the tensors need to be cuda tensors
-
-    Returns:
-    training loss
-    """
-
-    _dh = diffusion_hyperparams
-    T, Alpha_bar = _dh["T"], _dh["Alpha_bar"]
-
-    # audio = X
-    B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
-    diffusion_steps = torch.randint(T, size=(B,1,1)).cuda()  # randomly sample diffusion steps from 1~T
-    z = std_normal(audio.shape)
-    transformed_X = torch.sqrt(Alpha_bar[diffusion_steps]) * audio + torch.sqrt(1-Alpha_bar[diffusion_steps]) * z  # compute x_t from q(x_t|x_0)
-    epsilon_theta = net((transformed_X, diffusion_steps.view(B,1),), mel_spec=mel_spec)  # predict \epsilon according to \epsilon_\theta
-    return loss_fn(epsilon_theta, z)
 
 
 def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_directory):
@@ -263,3 +133,65 @@ def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_director
         os.chmod(output_directory, 0o775)
     print("output directory", output_directory, flush=True)
     return local_path, output_directory
+
+
+# Utilities for diffusion models
+
+def calc_diffusion_hyperparams(T, beta_0, beta_T, beta=None, fast=False):
+    """
+    Compute diffusion process hyperparameters
+
+    Parameters:
+    T (int):                    number of diffusion steps
+    beta_0 and beta_T (float):  beta schedule start/end value,
+                                where any beta_t in the middle is linearly interpolated
+
+    Returns:
+    a dictionary of diffusion hyperparameters including:
+        T (int), Beta/Alpha/Alpha_bar/Sigma (torch.tensor on cpu, shape=(T, ))
+        These cpu tensors are changed to cuda tensors on each individual gpu
+    """
+
+    if fast and beta is not None:
+        Beta = torch.tensor(beta)
+        T = len(beta)
+    else:
+        Beta = torch.linspace(beta_0, beta_T, T)
+    Alpha = 1 - Beta
+    Alpha_bar = Alpha + 0
+    Beta_tilde = Beta + 0
+    for t in range(1, T):
+        Alpha_bar[t] *= Alpha_bar[t-1]  # \bar{\alpha}_t = \prod_{s=1}^t \alpha_s
+        Beta_tilde[t] *= (1-Alpha_bar[t-1]) / (1-Alpha_bar[t])  # \tilde{\beta}_t = \beta_t * (1-\bar{\alpha}_{t-1}) / (1-\bar{\alpha}_t)
+    Sigma = torch.sqrt(Beta_tilde)  # \sigma_t^2  = \tilde{\beta}_t
+
+    _dh = {}
+    _dh["T"], _dh["Beta"], _dh["Alpha"], _dh["Alpha_bar"], _dh["Sigma"] = T, Beta.cuda(), Alpha.cuda(), Alpha_bar.cuda(), Sigma
+    return _dh
+
+
+""" Experimental feature for checkpoint smoothing. Didn't seem to help in brief tests """
+def smooth_dict(d, d0, n=None, alpha=None):
+    """ Smooth with arithmetic average (if n not None) or geometric average (if alpha not None) """
+    assert int(n is None) + int(alpha is None) == 1
+    if d is None:
+        assert n is None or n == 0 # must be first iteration
+        return d0
+
+    if n is not None:
+        avg_fn = lambda x, y: (x * n + y) / (n+1)
+    else:
+        avg_fn = lambda x, y: alpha * x + (1. - alpha) * y
+    return _bin_op_dict(d, d0, avg_fn)
+
+def _bin_op_dict(d0, d1, op):
+    """ Apply binary operator recursively to two dictionaries with matching keys """
+    if isinstance(d0, dict) and isinstance(d1, dict):
+        assert d0.keys() == d1.keys(), "Dictionaries must hvae matching keys"
+        return {
+            k: _bin_op_dict(d0[k], d1[k], op) for k in d0.keys()
+        }
+    elif not isinstance(d0, dict) and not isinstance(d1, dict):
+        return op(d0, d1)
+    else: raise Exception("Dictionaries must match keys")
+

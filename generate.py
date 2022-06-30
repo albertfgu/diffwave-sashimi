@@ -11,13 +11,49 @@ import torch
 import torch.nn as nn
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from tqdm import tqdm
 # from torch.utils.tensorboard import SummaryWriter # If tensorboard is preferred over wandb
 
 from scipy.io.wavfile import write as wavwrite
 # from scipy.io.wavfile import read as wavread
 
 from models import construct_model
-from utils import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams, local_directory, smooth_ckpt
+from utils import find_max_epoch, print_size, calc_diffusion_hyperparams, local_directory, smooth_ckpt
+
+def sampling(net, size, diffusion_hyperparams, condition=None):
+    """
+    Perform the complete sampling step according to p(x_0|x_T) = \prod_{t=1}^T p_{\theta}(x_{t-1}|x_t)
+
+    Parameters:
+    net (torch network):            the model
+    size (tuple):                   size of tensor to be generated,
+                                    usually is (number of audios to generate, channels=1, length of audio)
+    diffusion_hyperparams (dict):   dictionary of diffusion hyperparameters returned by calc_diffusion_hyperparams
+                                    note, the tensors need to be cuda tensors
+
+    Returns:
+    the generated audio(s) in torch.tensor, shape=size
+    """
+
+    _dh = diffusion_hyperparams
+    T, Alpha, Alpha_bar, Sigma = _dh["T"], _dh["Alpha"], _dh["Alpha_bar"], _dh["Sigma"]
+    assert len(Alpha) == T
+    assert len(Alpha_bar) == T
+    assert len(Sigma) == T
+    assert len(size) == 3
+
+    print('begin sampling, total number of reverse steps = %s' % T)
+
+    x = torch.normal(0, 1, size=size).cuda()
+    with torch.no_grad():
+        for t in tqdm(range(T-1, -1, -1)):
+            diffusion_steps = (t * torch.ones((size[0], 1))).cuda()  # use the corresponding reverse step
+            epsilon_theta = net((x, diffusion_steps,), mel_spec=condition)  # predict \epsilon according to \epsilon_\theta
+            x = (x - (1-Alpha[t])/torch.sqrt(1-Alpha_bar[t]) * epsilon_theta) / torch.sqrt(Alpha[t])  # update x_{t-1} to \mu_\theta(x_t)
+            if t > 0:
+                x = x + Sigma[t] * torch.normal(0, 1, size=size).cuda()  # add the variance term to x_{t-1}
+    return x
+
 
 @torch.no_grad()
 def generate(
