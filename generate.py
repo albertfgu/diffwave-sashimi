@@ -1,8 +1,5 @@
 import os
-# import json
-# import sys
 import time
-# import subprocess
 # import warnings
 # warnings.filterwarnings("ignore")
 
@@ -13,7 +10,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import hydra
-# import wandb
 from omegaconf import DictConfig, OmegaConf
 # from torch.utils.tensorboard import SummaryWriter # If tensorboard is preferred over wandb
 
@@ -86,12 +82,6 @@ def generate(
             os.makedirs(output_directory)
             os.chmod(output_directory, 0o775)
         print("saving to output directory", output_directory)
-
-    # if rank is not None:
-    #     output_directory = os.path.join(output_directory, str(rank))
-    #     if not os.path.isdir(output_directory):
-    #         os.makedirs(output_directory)
-    #         os.chmod(output_directory, 0o775)
 
     if batch_size is None:
         batch_size = n_samples
