@@ -1,5 +1,5 @@
 This is a fork of philsyn/diffwave, a reimplementation of the unconditional waveform synthesizer in [DIFFWAVE: A VERSATILE DIFFUSION MODEL FOR AUDIO SYNTHESIS](https://arxiv.org/pdf/2009.09761.pdf).
-This repository contains code to reproduce the SaShiMi+DiffWave experiments from []().
+This repository contains code to reproduce the SaShiMi+DiffWave experiments from [It’s Raw! Audio Generation with State-Space Models](https://arxiv.org/abs/2202.09729) (Goel et al. 2022).
 
 ## Overview
 
@@ -9,21 +9,24 @@ However, we have decided to release the implementation used to produce results i
 It is *not* recommended to use this to train SaShiMi models from scratch, as the core S4 model has undergone significant changes since that paper.
 
 Compared to the parent fork for DiffWave, this repository has:
+- Both unconditional (SC09) and conditional (LJSpeech) waveform synthesis. It's also designed in a way to be easy to add new datasets
 - Significantly improved infrastructure and documentation
-- Incorporation of the standalone [S4 module]() to create the SaShiMi DiffWave model (as well as the original DiffWave model which uses a WaveNet backbone)
-- Checkpoints for the main SaShiMi DiffWave models described in the paper
+- Configuration system with Hydra for modular configs and flexible command-line API
+- Logging with WandB instead of Tensorboard, including automatically generating and uploading samples during training
+- Option to replace WaveNet with the [SaShiMi backbone]() (based on the [S4 layer]())
+- Pretrained checkpoints and samples for both DiffWave (+Wavenet) and DiffWave+SaShiMi
 
 These are some features that would be nice to add:
-- Move from the original JSON based configuration system to [Hydra](https://hydra.cc)
-- Generate spectrograms on the fly based on the config instead of requiring a [separate step](#vocoding)
-- Incorporate latest SaShiMi standalone file; currently this reimplements the architecture using a model predating V2 of the S4 standalone
-- Can add an option to allow original Tensorboard logging (code is still there, just commented out) instead of WandB
+- Generate spectrograms on the fly based on the config instead of requiring a [separate preprocessing step](#vocoding)
+- Incorporate latest S4/SaShiMi standalone file; currently this reimplements the architecture using a model predating V2 of the S4 standalone [#sashimi]. Would be even better to use the pip S4 package once it's released
+- Mixed-precision training
+- Fast inference procedure from later versions of the DiffWave paper
+- Can add an option to allow original Tensorboard logging instead of WandB (code is still there, just commented out)
 PRs are very welcome!
 
 ## Usage
 
-A basic experiment can be run with
-```python train.py```
+A basic experiment can be run with `python train.py`.
 
 Configuration is managed by [Hydra](https://hydra.cc).
 Examples of different configs and configuring via command line are provided throughout this README
