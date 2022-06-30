@@ -67,13 +67,13 @@ def load_Speech_commands(path, batch_size=4, num_gpus=1):
     """
     Load speech commands dataset
     """
-    Speech_commands_dataset = SPEECHCOMMANDS(root=path, folder_in_archive='')                                                       
+    Speech_commands_dataset = SPEECHCOMMANDS(root=path, folder_in_archive='')
 
     # distributed sampler
     train_sampler = DistributedSampler(Speech_commands_dataset) if num_gpus > 1 else None
 
-    trainloader = torch.utils.data.DataLoader(Speech_commands_dataset, 
-                                              batch_size=batch_size,  
+    trainloader = torch.utils.data.DataLoader(Speech_commands_dataset,
+                                              batch_size=batch_size,
                                               sampler=train_sampler,
                                               num_workers=4,
                                               pin_memory=False,

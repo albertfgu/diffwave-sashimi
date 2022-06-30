@@ -51,9 +51,8 @@ dist_config:
   dist_backend: nccl
   dist_url: tcp://localhost:54321
 
-# Pass in 'wandb.mode=online' to turn on wandb logging
 wandb:
-  mode: disabled
+  mode: disabled # Pass in 'wandb.mode=online' to turn on wandb logging
   project: hippo
   entity: null
   id: null # Set to string to resume logging from run

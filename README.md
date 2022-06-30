@@ -22,8 +22,16 @@ PRs are very welcome!
 
 ## Usage
 
-A basic experiment can be run with by passing in a config in the form of a JSON file
-```python distributed_train.py 
+A basic experiment can be run with
+```python train.py```
+
+Configuration is managed by [Hydra](https://hydra.cc).
+Examples of different configs and configuring via command line are provided throughout this README
+
+### Multi-GPU training
+By default, all available GPUs are used (according to [`torch.cuda.device_count()`](https://pytorch.org/docs/stable/cuda.html#torch.cuda.device_count)).
+You can specify which GPUs to use by setting the [`CUDA_DEVICES_AVAILABLE`](https://developer.nvidia.com/blog/cuda-pro-tip-control-gpu-visibility-cuda_visible_devices/) environment variable before running the training module, or `CUDA_VISIBLE_DEVICES=0,1 python train.py`.
+
 
 ## Data
 

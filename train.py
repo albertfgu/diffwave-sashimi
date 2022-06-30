@@ -30,10 +30,35 @@ from generate import generate
 # from WaveNet import WaveNet_Speech_Commands as WaveNet
 from model import construct_model
 
+def distributed_train(rank, num_gpus, group_name, cfg):
+    # Initializer logger
+    if rank == 0 and cfg.wandb is not None:
+        wandb_cfg = cfg.pop("wandb")
+        wandb.init(
+            **wandb_cfg, config=OmegaConf.to_container(cfg, resolve=True)
+        )
+
+    # Distributed running initialization
+    dist_config = cfg.pop("dist_config")
+    if num_gpus > 1:
+        init_distributed(rank, num_gpus, group_name, **dist_config)
+
+    train(
+        rank=rank, num_gpus=num_gpus,
+        diffusion_config=cfg.diffusion_config,
+        model_config=cfg.model_config,
+        dataset_config=cfg.dataset_config,
+        # dist_config=cfg.dist_config,
+        # wandb_config=cfg.wandb,
+        # train_config=train_config,
+        # name=name,
+        # mel_path=mel_path,
+        **cfg.train_config,
+    )
 
 def train(
-    rank, num_gpus, group_name,
-    diffusion_config, model_config, dataset_config, dist_config, # train_config,
+    rank, num_gpus,
+    diffusion_config, model_config, dataset_config, # dist_config, wandb_config, # train_config,
     ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
     learning_rate, batch_size_per_gpu,
     n_samples,
@@ -41,10 +66,7 @@ def train(
     mel_path=None,
 ):
     """
-    Train the WaveNet model on the Speech Commands dataset
-
     Parameters:
-    num_gpus, rank, group_name:     parameters for distributed training
     ckpt_iter (int or 'max'):       the pretrained checkpoint to be loaded;
                                     automitically selects the maximum iteration if 'max' is selected
     n_iters (int):                  number of iterations to train, default is 1M
@@ -76,9 +98,12 @@ def train(
     #         config=cfg,
     #     )
 
-    # distributed running initialization
-    if num_gpus > 1:
-        init_distributed(rank, num_gpus, group_name, **dist_config)
+    # if rank == 0 and cfg.wandb is not None:
+    #     wandb_cfg = cfg.pop("wandb")
+    #     wandb.init(
+    #         **wandb_cfg, config=OmegaConf.to_container(cfg, resolve=True)
+    #     )
+
 
     # # Get shared checkpoint_directory ready
     # checkpoint_directory = os.path.join('exp', local_path, checkpoint_directory)
@@ -273,34 +298,30 @@ def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     OmegaConf.set_struct(cfg, False)  # Allow writing keys
 
-    if cfg.wandb is not None:
-        wandb_cfg = cfg.pop("wandb")
-        wandb.init(
-            **wandb_cfg, config=OmegaConf.to_container(cfg, resolve=True)
-        )
-
     if not os.path.isdir("exp/"):
         os.makedirs("exp/")
         os.chmod("exp/", 0o775)
 
     num_gpus = torch.cuda.device_count()
     train_fn = partial(
-        train,
+        distributed_train,
         num_gpus=num_gpus,
         group_name=time.strftime("%Y%m%d-%H%M%S"),
         # wandb_id=wandb_id,
-        diffusion_config=cfg.diffusion_config,
-        model_config=cfg.model_config,
-        dataset_config=cfg.dataset_config,
-        dist_config=cfg.dist_config,
+        cfg=cfg,
+        # diffusion_config=cfg.diffusion_config,
+        # model_config=cfg.model_config,
+        # dataset_config=cfg.dataset_config,
+        # dist_config=cfg.dist_config,
+        # wandb_config=cfg.wandb,
         # train_config=train_config,
         # name=name,
         # mel_path=mel_path,
-        **cfg.train_config,
+        # **cfg.train_config,
     )
 
     if num_gpus <= 1:
-        generate_fn(0)
+        train_fn(0)
     else:
         mp.set_start_method("spawn")
         processes = []
