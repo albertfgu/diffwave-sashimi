@@ -17,7 +17,7 @@ train: # Not used in generate.py
 generate: # Not used in train.py
   name: null # Name of experiment (prefix of experiment name)
   ckpt_iter: max # Which checkpoint to use; assign a number or "max"
-  ckpt_smooth: -1 # Which checkpoint to start averaging from (experimental)
+  ckpt_smooth: null # Which checkpoint to start averaging from (experimental feature)
   n_samples: 16 # Number of utterances to be generated (per GPU)
   batch_size: null # Number of samples to generate at once per GPU. null means max (equal to samples_per_gpu)
   mel_path: null
