@@ -1,4 +1,5 @@
 # @package _global_
+# Another example config with a harder setting for LJSpeech vocoding with larger hop size and train sequence length
 defaults:
   - /model: sashimi
   - /dataset: ljspeech
