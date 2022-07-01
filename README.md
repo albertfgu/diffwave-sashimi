@@ -6,41 +6,40 @@ For this reason it is not an official GitHub fork.
 
 ## Overview
 
-This repository is a supplement to the main [S4 repository]() which contains the official and up-to-date code for S4 and SaShiMi.
-The code here is *research code* - it was not originally planned to be released because it was forked from an external codebase instead of being incorporated into the main S4 codebase.
-However, we have decided to release the implementation used to produce results in the SaShiMi paper to improve reproducibility for downstream researchers.
+This repository aims to provide a flexible and modular implementation of the DiffWave audio diffusion model.
+The `checkpoints` branch of this repository has the original code used for reproducing experiments from the SaShiMi paper.
 Instructions for generating samples using checkpoints are in [#pretrained-models].
+The `master` branch of this repository has the latest versions of the S4/SaShiMi model and can be used to train new models from scratch.
 
-Working examples of how to train models from scratch with the latest version of S4/SaShiMi are also provided, but currently untested.
 
 Compared to the parent fork for DiffWave, this repository has:
 - Both unconditional (SC09) and vocoding (LJSpeech) waveform synthesis. It's also designed in a way to be easy to add new datasets
 - Significantly improved infrastructure and documentation
 - Configuration system with Hydra for modular configs and flexible command-line API
 - Logging with WandB instead of Tensorboard, including automatically generating and uploading samples during training
-- Option to replace WaveNet with the [SaShiMi backbone]() (based on the [S4 layer]())
+- Vocoding does not require a separate pre-processing step to generate spectrograms, making it easier and less error-prone to use
+- Option to replace WaveNet with the SaShiMi backbone (based on the [S4 layer](https://github.com/HazyResearch/state-spaces))
 - Pretrained checkpoints and samples for both DiffWave (+Wavenet) and DiffWave+SaShiMi
 
-These are some features that would be nice to add:
-- Incorporate latest S4/SaShiMi standalone file; currently this reimplements the architecture using a model predating V2 of the S4 standalone [#sashimi]. Would be even better to use the pip S4 package once it's released
+These are some features that would be nice to add.
+PRs are very welcome!
+- Use the pip S4 package once it's released, instead of manually updating the standalone files
 - Mixed-precision training
 - Fast inference procedure from later versions of the DiffWave paper
-- Generate spectrograms on the fly based on the config instead of requiring a [separate preprocessing step](#vocoding)
 - Can add an option to allow original Tensorboard logging instead of WandB (code is still there, just commented out)
 - The different backbones (WaveNet and SaShiMi) can be consolidated more cleanly with the diffusion portions factored out
-
-PRs are very welcome!
 
 ## Usage
 
 A basic experiment can be run with `python train.py`.
-This default config is for SC09 unconditional generation.
+This default config is for SC09 unconditional generation with the SaShiMi backbone.
 
 ### Hydra
 
 Configuration is managed by [Hydra](https://hydra.cc).
 Config files are under `configs/`.
-Examples of different configs and configuring via command line are provided throughout this README.
+Examples of different configs and running experiments via command line are provided throughout this README.
+Hydra has a steeper learning curve than standard `argparse`-based workflows, but offers much more flexibility and better experiment management. Feel free to file Issues for help with configs.
 
 ### Multi-GPU training
 By default, all available GPUs are used (according to [`torch.cuda.device_count()`](https://pytorch.org/docs/stable/cuda.html#torch.cuda.device_count)).
@@ -170,7 +169,7 @@ python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.m
 # Pretrained Models
 
 The branch `git checkout checkpoints` is provided for the code used in the checkpoints.
-**This branch is meant only for reproducing generated samples from the ICML 2022 paper - please do not attempt train-from-scratch results from this code.**
+**This branch is meant only for reproducing generated samples from the SaShiMi paper from ICML 2022 - please do not attempt train-from-scratch results from this code.**
 Both SaShiMi and WaveNet backbones have issues that are explained below.
 
 ### Checkpoints
