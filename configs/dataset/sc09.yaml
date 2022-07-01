@@ -1,4 +1,4 @@
-name: sc09
+_name_: sc09
 data_path: data/sc09
 segment_length: 16000
 sampling_rate: 16000

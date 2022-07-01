@@ -1,4 +1,4 @@
-unconditional: true
+_name_: true
 backbone: sashimi
 in_channels: 1
 out_channels: 1

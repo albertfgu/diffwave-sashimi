@@ -96,8 +96,8 @@ def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_director
     # ckpt_path = output_directory # train_cfg['output_directory']
 
     # generate experiment (local) path
-    # TODO should be controlled locally by each model class
-    if model_cfg["backbone"] == "sashimi":
+    # TODO should be controlled by each model class instead of a central controller like this
+    if model_cfg["_name_"] == "sashimi":
         model_name = "{}_d{}_n{}_pool_{}_expand{}_ff{}".format(
             "unet" if model_cfg["unet"] else "snet",
             model_cfg["d_model"],

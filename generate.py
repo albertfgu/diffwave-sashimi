@@ -58,12 +58,12 @@ def sampling(net, size, diffusion_hyperparams, condition=None):
 @torch.no_grad()
 def generate(
         rank,
-        n_samples, # Samples per GPU
-        ckpt_iter,
-        name,
         diffusion_cfg,
         model_cfg,
         dataset_cfg,
+        ckpt_iter="max",
+        n_samples=1, # Samples per GPU
+        name=None,
         batch_size=None,
         ckpt_smooth=None,
         mel_path=None, mel_name=None,
@@ -143,11 +143,13 @@ def generate(
             except:
                 raise Exception('No ground truth mel spectrogram found')
         else:
-            import mel2samp as mel
-            dataset = mel.Mel2Samp(**dataset_cfg)
+            import dataloaders.mel2samp as mel2samp
+            dataset_name = dataset_cfg.pop("_name_")
+            _mel = mel2samp.Mel2Samp(**dataset_cfg)
+            dataset_cfg["_name_"] = dataset_name # Restore
             filepath = f"{dataset_cfg.data_path}/{mel_name}.wav"
-            audio, sr = load_wav_to_torch(filepath)
-            melspectrogram = mel.get_mel(audio)
+            audio, sr = mel2samp.load_wav_to_torch(filepath)
+            melspectrogram = _mel.get_mel(audio)
             # filename = os.path.basename(filepath)
             # new_filepath = cfg.output_dir + '/' + filename + '.pt'
             # print(new_filepath)

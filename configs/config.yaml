@@ -11,17 +11,17 @@ train: # Not used in generate.py
   n_iters: 1000001
   learning_rate: 2e-4
   batch_size_per_gpu: 4
-  n_samples: 16 # Samples per GPU to generate per checkpoint
-  mel_path: null # Path to load spectrograms from for vocoding
+  # n_samples: 16 # Samples per GPU to generate per checkpoint
+  # mel_path: null # Path to load spectrograms from for vocoding
 
-generate: # Not used in train.py
-  name: null # Name of experiment (prefix of experiment name)
-  ckpt_iter: max # Which checkpoint to use; assign a number or "max"
-  ckpt_smooth: null # Which checkpoint to start averaging from (experimental feature)
+generate:
+  # name: null # Name of experiment (prefix of experiment name)
+  ckpt_iter: max # Which checkpoint to use; assign a number or "max". Is ignored when sampling during training
+  ckpt_smooth: null # Which checkpoint to start averaging from (experimental feature, can ignore)
   n_samples: 16 # Number of utterances to be generated (per GPU)
   batch_size: null # Number of samples to generate at once per GPU. null means max (equal to samples_per_gpu)
-  mel_path: null
-  mel_name: null
+  mel_path: null # Folder of preprocessed spectrograms (optional)
+  mel_name: null # Name of specific spectrogram to condition on (set to null for unconditional, set to an audio file name for vocoding)
 
 distributed:
   dist_backend: nccl
