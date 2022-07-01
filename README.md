@@ -1,14 +1,14 @@
-This is a fork of https://github.com/philsyn/DiffWave-unconditional and https://github.com/philsyn/DiffWave-Vocoder, a reimplementation of the waveform synthesizer in [DIFFWAVE: A VERSATILE DIFFUSION MODEL FOR AUDIO SYNTHESIS](https://arxiv.org/pdf/2009.09761.pdf).
-This repository contains code to reproduce the SaShiMi+DiffWave experiments from [It’s Raw! Audio Generation with State-Space Models](https://arxiv.org/abs/2202.09729) (Goel et al. 2022).
+This repository is an implementation of the waveform synthesizer in [DIFFWAVE: A VERSATILE DIFFUSION MODEL FOR AUDIO SYNTHESIS](https://arxiv.org/pdf/2009.09761.pdf).
+It also has code to reproduce the SaShiMi+DiffWave experiments from [It’s Raw! Audio Generation with State-Space Models](https://arxiv.org/abs/2202.09729) (Goel et al. 2022).
 
+This is a fork/combination of the implementations [philsyn/DiffWave-unconditional](https://github.com/philsyn/DiffWave-unconditional) and [philsyn/DiffWave-Vocoder](https://github.com/philsyn/DiffWave-Vocoder).
 This repo uses Git LFS to store model checkpoints, which unfortunately [does not work with public forks](https://github.com/git-lfs/git-lfs/issues/1939).
 For this reason it is not an official GitHub fork.
 
 ## Overview
 
 This repository aims to provide a flexible and modular implementation of the DiffWave audio diffusion model.
-The `checkpoints` branch of this repository has the original code used for reproducing experiments from the SaShiMi paper.
-Instructions for generating samples using checkpoints are in [#pretrained-models].
+The `checkpoints` branch of this repository has the original code used for reproducing experiments from the SaShiMi paper ([instructions](#pretrained-models)]).
 The `master` branch of this repository has the latest versions of the S4/SaShiMi model and can be used to train new models from scratch.
 
 
@@ -28,6 +28,16 @@ PRs are very welcome!
 - Fast inference procedure from later versions of the DiffWave paper
 - Can add an option to allow original Tensorboard logging instead of WandB (code is still there, just commented out)
 - The different backbones (WaveNet and SaShiMi) can be consolidated more cleanly with the diffusion portions factored out
+
+## ToC
+
+- [Usage](#usage)
+- [Data](#data)
+- [Training](#training)
+- [Vocoding](#vocoding)
+- [Pretrained Models](#pretrained-models)
+  - [DiffWave+SaShiMi](#sashimi-1)
+  - [DiffWave](#wavenet-1)
 
 ## Usage
 
@@ -100,18 +110,18 @@ ff: Width of inner layer of MLP (i.e. MLP block has dimensions d_model -> d_mode
 Experiments are saved under `exp/<run>` with an automatically generated run name identifying the experiment (model and setting).
 Checkpoints are inside `exp/<run>/checkpoint` and generated audio samples in `exp/<name>/waveforms`.
 
-## Logging
+### Logging
 Set `wandb.mode=online` to turn on WandB logging, or `wandb.mode=disabled` to turn it off.
 Standard wandb arguments such as entity and project are configurable.
 
-## Resuming
+### Resuming
 
 To resume from the checkpoint `exp/<run>/checkpoint/1000.pkl`, simply re-run the same training command with the additional flag `train.ckpt_iter=1000` .
 `train_config.ckpt_iter=max` resumes from the last checkpoint, and `train_config.ckpt_iter=-1` trains from scratch.
 
 Use `wandb.id=<id>` to resume logging to a previous run.
 
-## Generating
+### Generating
 
 After training with `python train.py <flags>`,
 ```
@@ -209,7 +219,7 @@ Generate: `python generate.py experiment=sc09 model=sashimi model.d_model=64 gen
 
 ## WaveNet
 
-The WaveNet backbone provided in the parent fork had a [small]() [bug]() where it used `x += y` instead of `x = x + y`.
+The WaveNet backbone provided in the parent fork had a [small](https://github.com/albertfgu/diffwave-sashimi/blob/checkpoints/models/wavenet.py#L92) [bug](https://github.com/albertfgu/diffwave-sashimi/blob/checkpoints/models/wavenet.py#L163) where it used `x += y` instead of `x = x + y`.
 This can cause a difficult-to-trace error in some PyTorch + environment combinations (but sometimes it works; I never figured out when it's ok).
 These two lines are fixed in the main branch of this repo.
 
@@ -237,9 +247,9 @@ A shorthand model config is also defined:
 `python train.py model=wavenet_small train.batch_size_per_gpu=4 generate.n_samples=32`
 
 
-### Conditional
+## Vocoders
 The parent fork has a few pretrained LJSpeech vocoder models. Because of the WaveNet bug, we recommend not using these and simply training from scratch from the `master` branch; these vocoder models are small and faster to train than the unconditional SC09 models.
-Feel free to file an issue for help with configs
+Feel free to file an issue for help with configs.
 <!--
 - [channel=64 model](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch64_T50_betaT0.05/logs/checkpoint)
 - [channel=64 samples](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch64_T50_betaT0.05/speeches)
