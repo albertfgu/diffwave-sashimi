@@ -9,10 +9,12 @@ For this reason it is not an official GitHub fork.
 This repository is a supplement to the main [S4 repository]() which contains the official and up-to-date code for S4 and SaShiMi.
 The code here is *research code* - it was not originally planned to be released because it was forked from an external codebase instead of being incorporated into the main S4 codebase.
 However, we have decided to release the implementation used to produce results in the SaShiMi paper to improve reproducibility for downstream researchers.
-It is *not* recommended to use this to train SaShiMi models from scratch, as the core S4 model has undergone significant changes since that paper.
+Instructions for generating samples using checkpoints are in [#pretrained-models].
+
+Working examples of how to train models from scratch with the latest version of S4/SaShiMi are also provided, but currently untested.
 
 Compared to the parent fork for DiffWave, this repository has:
-- Both unconditional (SC09) and conditional (LJSpeech) waveform synthesis. It's also designed in a way to be easy to add new datasets
+- Both unconditional (SC09) and vocoding (LJSpeech) waveform synthesis. It's also designed in a way to be easy to add new datasets
 - Significantly improved infrastructure and documentation
 - Configuration system with Hydra for modular configs and flexible command-line API
 - Logging with WandB instead of Tensorboard, including automatically generating and uploading samples during training
@@ -20,12 +22,13 @@ Compared to the parent fork for DiffWave, this repository has:
 - Pretrained checkpoints and samples for both DiffWave (+Wavenet) and DiffWave+SaShiMi
 
 These are some features that would be nice to add:
-- Generate spectrograms on the fly based on the config instead of requiring a [separate preprocessing step](#vocoding)
 - Incorporate latest S4/SaShiMi standalone file; currently this reimplements the architecture using a model predating V2 of the S4 standalone [#sashimi]. Would be even better to use the pip S4 package once it's released
 - Mixed-precision training
 - Fast inference procedure from later versions of the DiffWave paper
+- Generate spectrograms on the fly based on the config instead of requiring a [separate preprocessing step](#vocoding)
 - Can add an option to allow original Tensorboard logging instead of WandB (code is still there, just commented out)
 - The different backbones (WaveNet and SaShiMi) can be consolidated more cleanly with the diffusion portions factored out
+
 PRs are very welcome!
 
 ## Usage
@@ -33,7 +36,10 @@ PRs are very welcome!
 A basic experiment can be run with `python train.py`.
 This default config is for SC09 unconditional generation.
 
+### Hydra
+
 Configuration is managed by [Hydra](https://hydra.cc).
+Config files are under `configs/`.
 Examples of different configs and configuring via command line are provided throughout this README.
 
 ### Multi-GPU training
@@ -60,28 +66,26 @@ tar xvf LJSpeech-1.1.tar.bz2
 The waveforms should be organized in the folder `./data/LJSpeech-1.1/wavs`.
 
 
-
 ## Models
 
 All models use the DiffWave diffusion model with either a WaveNet or SaShiMi backbone.
-The model configuration is controlled by the dictionary `model_config` inside the config file.
+The model configuration is controlled by the dictionary `model` inside the config file.
 
 ### Diffusion
 
 The flags `in_channels` and `out_channels` control the data dimension.
 The three flags `diffusion_step_embed_dim_{in,mid,out}` control DiffWave parameters for the diffusion step embedding.
 The flag `unconditional` determines whether to do unconditional or conditional generation (using dataset SC09 and LibreSpeech respectively).
-These flags are common to both embeddings.
+These flags are common to both backbones.
 
 ### WaveNet
 
-The WaveNet backbone is toggled by setting `sashimi=false`.
+The WaveNet backbone is used by setting `model._name_=wavenet`.
 The parameters `res_channels`, `skip_channels`, `num_res_layers`, and `dilation_cycle` control the WaveNet backbone.
-The below SaShiMi parameters will then be ignored.
 
 ### SaShiMi
 
-The SaShiMi backbone is toggled by setting `sashimi=true`.
+The SaShiMi backbone is used by setting `model._name_=sashimi`.
 The parameters are:
 ```
 unet: If true, use S4 layers in both the downsample and upsample parts of the backbone. If false, use S4 layers in only the upsample part.
@@ -91,60 +95,92 @@ pool: List of pooling factors per stage (e.g. [4, 4] means three total stages, p
 expand: Multiplicative factor to increase model dimension between stages
 ff: Width of inner layer of MLP (i.e. MLP block has dimensions d_model -> d_model*ff -> d_model)
 ```
-The above WaveNet parameters will be ignored.
 
 ## Training
 
-Experiments are saved under `exp/<run>` with an automatically generated run name identifying the experiment (model and setting), e.g. `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond`.
+Experiments are saved under `exp/<run>` with an automatically generated run name identifying the experiment (model and setting).
 Checkpoints are inside `exp/<run>/checkpoint` and generated audio samples in `exp/<name>/waveforms`.
 
 ## Logging
-Set `train_config.wandb_mode=online` to turn on WandB logging, or `train_config.wandb_mode=disabled` to turn it off.
-You may want to change the project name on line []
+Set `wandb.mode=online` to turn on WandB logging, or `wandb.mode=disabled` to turn it off.
+Standard wandb arguments such as entity and project are configurable.
 
 ## Resuming
 
-To resume from the checkpoint `exp/<run>/checkpoint/1000.pkl`, simply set `train_config.ckpt_iter=1000` in the config and re-run the same command, `python distributed_train.py -c config.json`.
+To resume from the checkpoint `exp/<run>/checkpoint/1000.pkl`, simply re-run the same training command with the additional flag `train.ckpt_iter=1000` .
 `train_config.ckpt_iter=max` resumes from the last checkpoint, and `train_config.ckpt_iter=-1` trains from scratch.
 
-Use `--wandb_id <id>` to resume logging to a wandb run ID
+Use `wandb.id=<id>` to resume logging to a previous run.
 
 ## Generating
 
-After training,
+After training with `python train.py <flags>`,
 ```
-python distributed_inference.py -c generate.json -n 2048 -b 128 --ckpt_iter 500000
+python generate.py <flags>
 ```
-to generate 2048 samples (total) at a batch size of 128 per GPU from the model specified in the config, which will be at `exp/{model}/waveforms/500000`.
-Generated samples will be stored in `exp/<run>/waveforms/<ckpt_iter>/`
+generates samples according to the `generate` dictionary of the config.
+
+For example,
+```
+python generate.py <flags> generate.ckpt_iter=500000 generate.n_samples=2048 generate.batch_size=128
+```
+generates 2048 total samples at a batch size of 128 per GPU from the model specified in the config at checkpoint iteration 500000.
+
+Generated samples will be stored in `exp/<run>/waveforms/<generate.ckpt_iter>/`
 
 ## Vocoding
 
-First create spectrograms to condition on: `python mel2samp.py -f ../data/ljspeech/LJSpeech-1.1/wavs -c config_vocoder.json -o mel256` to put which creates spectrograms based on the arguments in the `dataset_config`. (Here 256 refers to the hop size, but you can use any folder name.)
-Some notes:
-- The hop size affects how much upsampling is needed in the diffusion upsampling. The parameter `mel_upsample` controls this; the product of the upsample sizes should equal the hop size.
-- Note that these spectrograms are only used for inference/generation. With a small tweak it should be possible to generate them on the fly to avoid this hassle of creating spectrograms separately
+- After downloading the data, make the config's `dataset.data_path` point to the `.wav` files
+- Toggle `model.unconditional=false`
+- Pass in the name of a `.wav` file for generation, e.g. `generate.mel_name=LJ001-0001`. Every checkpoint, vocoded samples for this audio file will be logged to wandb
 
-Run the same training script, with the additional command argument pointing to the spectrogramfolder, e.g. `python distributed_train.py -c config_vocoder_baseline.json --mel_path mel256`
+This is an example command for LJSpeech vocoding; see the config `configs/experiment/ljspeech.yaml` for details
+```
+python train.py experiment=ljspeech model=sashimi model.d_model=32 wandb.mode=online
+```
 
+Another example with a smaller WaveNet backbone, similar to the results from the DiffWave paper:
+```
+python train.py experiment=ljspeech model=wavenet model.res_channels=64 model.skip_channels=64 wandb.mode=online
+```
 
-### Conditional generation
-- To generate audio, run ```python inference.py -c ${config}.json -cond ${conditioner_name}```. For example, if the name of the mel spectrogram is ```LJ001-0001.wav.pt```, then ```${conditioner_name}``` is ```LJ001-0001```. Provided mel spectrograms include ```LJ001-0001``` through ```LJ001-0186```.
+Generation can be done in the usual way, conditioning on any spectrogram, e.g.
+```
+python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.mel_name=LJ001-0002
+```
+
+### Pre-processed Spectrograms
+
+Other DiffWave vocoder implementations such as https://github.com/philsyn/DiffWave-Vocoder and https://github.com/lmnt-com/diffwave require first generating spectrograms in a separate pre-processing step.
+Our implementation does not require this step, which we find more convenient.
+However, pre-processing and saving the spectrograms is still possible.
+
+To pre-generate a folder of spectrograms according to the `dataset` config, run the `mel2samp` script and specify an output directory:
+```
+python -m dataloaders.mel2samp experiment=ljspeech +output_dir=mel256
+```
+(Here 256 refers to the hop size, but you can use any folder name.)
+
+Then during training or generation, add in the additional flag `generate.mel_path=mel256` to use the pre-processed spectrograms, e.g.
+```
+python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.mel_name=LJ001-0002 generate.mel_path=mel256 
+```
 
 
 # Pretrained Models
 
 The branch `git checkout checkpoints` is provided for the code used in the checkpoints.
 **This branch is meant only for reproducing generated samples from the ICML 2022 paper - please do not attempt train-from-scratch results from this code.**
-Reasons are explained below.
+Both SaShiMi and WaveNet backbones have issues that are explained below.
 
 ### Checkpoints
 
 Install [Git LFS](https://git-lfs.github.com/) and `git lfs pull` to download the checkpoints.
 
 ### Samples
-Pre-generated samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
+For each of the provided checkpoints, 16 audio samples are provided.
 
+More pre-generated samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
 The below four models correspond to "sashimi-diffwave", "sashimi-diffwave-small", "diffwave", and "diffwave-small" respectively.
 
 Command lines are also provided to reproduce these samples (up to random seed).
@@ -152,9 +188,9 @@ Command lines are also provided to reproduce these samples (up to random seed).
 
 ## SaShiMi
 
-The version of S4 used in these experiments is an outdated version of S4 that predates V2 (February 2022) of the [S4 repository](https://github.com/HazyResearch/state-spaces) (currently on V3 as of July 2022).
+The version of S4 used in these experiments is an outdated version of S4 from January 2022 that predates V2 (February 2022) of the [S4 repository](https://github.com/HazyResearch/state-spaces). S4 is currently on V3 as of July 2022.
 
-### SaShiMi+DiffWave
+### DiffWave+SaShiMi
 
 Experiment folder: `exp/unet_d128_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
 Train from scratch: `python train.py model=sashimi train.ckpt_iter=-1`
@@ -162,15 +198,15 @@ Resume training: `python train.py model=sashimi train.ckpt_iter=max train.learni
 (as described in the paper, this model used a manual learning rate decay after 500k steps)
 
 Generation examples:
-`python generate.py model=sashimi` (Best model)
-`python generate.py model=sashimi generate.ckpt_iter=500000` (Earlier model)
+`python generate.py experiment=sc09 model=sashimi` (Latest model at 800k steps)
+`python generate.py experiment=sc09 model=sashimi generate.ckpt_iter=500000` (Earlier model at 500k steps)
 
-`python generate.py generate.n_samples=256 generate.batch_size=128` (Generate 2048 total samples with largest batch that fits on an A100; used for evaluation metrics in the paper)
+`python generate.py generate.n_samples=256 generate.batch_size=128` (Generate 256\*\<num\_gpus\> total samples with largest batch that fits on an A100. The paper uses this command to generate 2048 samples on an 8xA100 machine for evaluation metrics.)
 
-### SaShiMi+DiffWave small
+### DiffWave+SaShiMi small
 Experiment folder: `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
-Train: `python train.py model=sashimi model.d_model=64 train.n_samples=32` (since generation is faster, you can increase the logged samples per epoch)
-Generate: `python generate.py model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256`
+Train: `python train.py experiment=sc09 model=sashimi model.d_model=64 train.batch_size_per_gpu=4 generate.n_samples=32` (since the model is smaller, you can increase the batch size and logged samples per checkpoint)
+Generate: `python generate.py experiment=sc09 model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256`
 
 ## WaveNet
 
@@ -185,7 +221,7 @@ This allows generating from the model, but may not train in some environments.
 **If anyone knows why this happens, I would love to know! Shoot me an email or file an Issue!**
 
 
-### (WaveNet)+DiffWave
+### DiffWave(+WaveNet)
 Experiment folder: `exp/wnet_h256_d36_T200_betaT0.02_uncond/`
 Usage: `python <train|generate>.py model=wavenet`
 
@@ -195,17 +231,20 @@ The checkpoint at 500000 steps is our version trained from scratch.
 These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`.
 I don't remember if I changed anything in the code to cause this; perhaps it could also be differences in PyTorch or versions or environments?
 
-### (WaveNet)+DiffWave small
+### DiffWave(+WaveNet) small
 Experiment folder: `exp/wnet_h128_d30_T200_betaT0.02_uncond/`
-Usage: `python <train|generate>.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10` or equivalently `python <train|generate>.py model=wavenet_small`
+Train: `python train.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10 train.batch_size_per_gpu=4 generate.n_samples=32`
+A shorthand model config is also defined:
+`python train.py model=wavenet_small train.batch_size_per_gpu=4 generate.n_samples=32`
 
 
 ### Conditional
+The parent fork has a few pretrained LJSpeech vocoder models. Because of the WaveNet bug, we recommend not using these and simply training from scratch from the `master` branch; these vocoder models are small and faster to train than the unconditional SC09 models.
+Feel free to file an issue for help with configs
+<!--
 - [channel=64 model](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch64_T50_betaT0.05/logs/checkpoint)
 - [channel=64 samples](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch64_T50_betaT0.05/speeches)
 - [channel=128 model](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch128_T200_betaT0.02/logs/checkpoint)
 - [channel=128 samples](https://github.com/philsyn/DiffWave-Vocoder/tree/master/exp/ch128_T200_betaT0.02/speeches)
-
-
-# Notes
+-->
 

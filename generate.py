@@ -58,24 +58,27 @@ def sampling(net, size, diffusion_hyperparams, condition=None):
 @torch.no_grad()
 def generate(
         rank,
-        n_samples, # Samples per GPU
-        ckpt_iter,
-        name,
         diffusion_cfg,
         model_cfg,
         dataset_cfg,
+        ckpt_iter="max",
+        n_samples=1, # Samples per GPU
+        name=None,
         batch_size=None,
-        ckpt_smooth=-1,
-        mel_path=None, mel_name="LJ001-0001",
+        ckpt_smooth=None,
+        mel_path=None, mel_name=None,
+        dataloader=None,
     ):
     """
     Generate audio based on ground truth mel spectrogram
 
     Parameters:
     output_directory (str):         checkpoint path
-    n_samples (int):              number of samples to generate, default is 4
+    n_samples (int):                number of samples to generate, default is 4
     ckpt_iter (int or 'max'):       the pretrained checkpoint to be loaded;
                                     automatically selects the maximum iteration if 'max' is selected
+    mel_path, mel_name (str):       condition on spectrogram "{mel_path}/{mel_name}.wav.pt"
+    # dataloader:                     condition on spectrograms provided by dataloader
     """
 
     if rank is not None:
@@ -99,7 +102,7 @@ def generate(
         ckpt_iter = find_max_epoch(ckpt_path)
     ckpt_iter = int(ckpt_iter)
 
-    if ckpt_smooth < 0: # TODO not a good default, should be None
+    if ckpt_smooth is None:
         try:
             model_path = os.path.join(ckpt_path, '{}.pkl'.format(ckpt_iter))
             checkpoint = torch.load(model_path, map_location='cpu')
@@ -123,13 +126,35 @@ def generate(
         batch_size = n_samples
     assert n_samples % batch_size == 0
 
-    if mel_path is not None and mel_name is not None:
-        # use ground truth mel spec
-        try:
-            ground_truth_mel_name = os.path.join(mel_path, '{}.wav.pt'.format(mel_name))
-            ground_truth_mel_spectrogram = torch.load(ground_truth_mel_name).unsqueeze(0).cuda()
-        except:
-            raise Exception('No ground truth mel spectrogram found')
+    # if mel_path is not None and mel_name is not None:
+    #     # use ground truth mel spec
+    #     try:
+    #         ground_truth_mel_name = os.path.join(mel_path, '{}.wav.pt'.format(mel_name))
+    #         ground_truth_mel_spectrogram = torch.load(ground_truth_mel_name).unsqueeze(0).cuda()
+    #     except:
+    #         raise Exception('No ground truth mel spectrogram found')
+    #     audio_length = ground_truth_mel_spectrogram.shape[-1] * dataset_cfg["hop_length"]
+    if mel_name is not None:
+        if mel_path is not None: # pre-generated spectrogram
+            # use ground truth mel spec
+            try:
+                ground_truth_mel_name = os.path.join(mel_path, '{}.wav.pt'.format(mel_name))
+                ground_truth_mel_spectrogram = torch.load(ground_truth_mel_name).unsqueeze(0).cuda()
+            except:
+                raise Exception('No ground truth mel spectrogram found')
+        else:
+            import dataloaders.mel2samp as mel2samp
+            dataset_name = dataset_cfg.pop("_name_")
+            _mel = mel2samp.Mel2Samp(**dataset_cfg)
+            dataset_cfg["_name_"] = dataset_name # Restore
+            filepath = f"{dataset_cfg.data_path}/{mel_name}.wav"
+            audio, sr = mel2samp.load_wav_to_torch(filepath)
+            melspectrogram = _mel.get_mel(audio)
+            # filename = os.path.basename(filepath)
+            # new_filepath = cfg.output_dir + '/' + filename + '.pt'
+            # print(new_filepath)
+            # torch.save(melspectrogram, new_filepath)
+            ground_truth_mel_spectrogram = melspectrogram.unsqueeze(0).cuda()
         audio_length = ground_truth_mel_spectrogram.shape[-1] * dataset_cfg["hop_length"]
     else:
         # predefine audio shape

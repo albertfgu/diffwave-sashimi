@@ -33,9 +33,10 @@ import torch.utils.data
 import sys
 from scipy.io.wavfile import read
 from tqdm import tqdm
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 # We're using the audio processing from TacoTron2 to make sure it matches
-# sys.path.insert(0, 'tacotron2')
 from .stft import TacotronSTFT
 
 MAX_WAV_VALUE = 32768.0
@@ -115,34 +116,42 @@ class Mel2Samp(torch.utils.data.Dataset):
 # Takes directory of clean audio and makes directory of spectrograms
 # Useful for making test sets
 # ===================================================================
-if __name__ == "__main__":
+# Original code from philsyn/diffwave-Vocoder
+# Not used in this codebase, but can be used to create a folder of preprocessed spectrograms
+@hydra.main(version_base=None, config_path="../configs/", config_name="config")
+def main(cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg.dataset))
+    OmegaConf.set_struct(cfg, False)  # Allow writing keys
     # Get defaults so it can work with no Sacred
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-f', "--filelist_path", required=True)
-    parser.add_argument('-c', '--config', type=str,
-                        help='JSON file for configuration')
-    parser.add_argument('-o', '--output_dir', type=str,
-                        help='Output directory')
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # # parser.add_argument('-f', "--filelist_path", required=True)
+    # # parser.add_argument('-c', '--config', type=str,
+    # #                     help='JSON file for configuration')
+    # parser.add_argument('-o', '--output_dir', type=str, help='Output directory')
+    # args = parser.parse_args()
 
-    with open(args.config) as f:
-        data = f.read()
+    # with open(args.config) as f:
+    #     data = f.read()
     # data_config = json.loads(data)["validset_config"]
-    data_config = json.loads(data)["dataset_config"]
-    mel2samp = Mel2Samp(**data_config)
+    # data_config = json.loads(data)["dataset_config"]
+    cfg.dataset.pop("_name_")
+    mel2samp = Mel2Samp(**cfg.dataset)
 
-    filepaths = files_to_list(args.filelist_path)
+    filepaths = files_to_list(cfg.dataset.data_path)
     filepaths = sorted(filepaths)
 
     # Make directory if it doesn't exist
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
-        os.chmod(args.output_dir, 0o775)
+    if not os.path.isdir(cfg.output_dir):
+        os.makedirs(cfg.output_dir)
+        os.chmod(cfg.output_dir, 0o775)
 
     for filepath in tqdm(filepaths):
         audio, sr = load_wav_to_torch(filepath)
         melspectrogram = mel2samp.get_mel(audio)
         filename = os.path.basename(filepath)
-        new_filepath = args.output_dir + '/' + filename + '.pt'
+        new_filepath = cfg.output_dir + '/' + filename + '.pt'
         # print(new_filepath)
         torch.save(melspectrogram, new_filepath)
+
+if __name__ == "__main__":
+    main()

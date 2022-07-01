@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - /model: sashimi
+  - /dataset: ljspeech
+
+diffusion:
+  T: 50
+  beta_0: 0.0001
+  beta_T: 0.05
+  beta: null
+
+train:
+  iters_per_ckpt: 1000
+  batch_size_per_gpu: 4
+
+generate:
+  mel_name: LJ001-0001
+  n_samples: 2
+
+model:
+  unconditional: false
+  mel_upsample: [16, 16] # Product should equal hop size in the dataset config!

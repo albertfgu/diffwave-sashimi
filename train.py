@@ -42,17 +42,18 @@ def distributed_train(rank, num_gpus, group_name, cfg):
         diffusion_cfg=cfg.diffusion,
         model_cfg=cfg.model,
         dataset_cfg=cfg.dataset,
+        generate_cfg=cfg.generate,
         **cfg.train,
     )
 
 def train(
     rank, num_gpus,
-    diffusion_cfg, model_cfg, dataset_cfg, # dist_cfg, wandb_cfg, # train_cfg,
+    diffusion_cfg, model_cfg, dataset_cfg, generate_cfg, # dist_cfg, wandb_cfg, # train_cfg,
     ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
     learning_rate, batch_size_per_gpu,
-    n_samples,
+    # n_samples,
     name=None,
-    mel_path=None,
+    # mel_path=None,
 ):
     """
     Parameters:
@@ -160,17 +161,22 @@ def train(
                 print('model at iteration %s is saved' % n_iter)
 
                 # Generate samples
-                if model_cfg["unconditional"]:
-                    mel_path = None
-                    mel_name = None
-                else:
-                    assert mel_path is not None
-                    mel_name="LJ001-0001"
+                # if model_cfg["unconditional"]:
+                #     mel_path = None
+                #     mel_name = None
+                # else:
+                #     assert mel_path is not None
+                #     mel_name=generate_cfg.mel_name # "LJ001-0001"
+                if not model_cfg["unconditional"]: assert generate_cfg.mel_name is not None
+                generate_cfg["ckpt_iter"] = n_iter
                 samples = generate(
-                    n_samples, n_iter, name,
+                    rank, # n_iter,
                     diffusion_cfg, model_cfg, dataset_cfg,
-                    mel_path=mel_path,
-                    mel_name=mel_name,
+                    name=name,
+                    **generate_cfg,
+                    # n_samples, n_iter, name,
+                    # mel_path=mel_path,
+                    # mel_name=mel_name,
                 )
                 samples = [wandb.Audio(sample.squeeze().cpu(), sample_rate=dataset_cfg['sampling_rate']) for sample in samples]
                 wandb.log(

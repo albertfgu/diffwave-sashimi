@@ -1,0 +1,32 @@
+# @package _global_
+# Another example config with a harder setting for LJSpeech vocoding with larger hop size and train sequence length
+defaults:
+  - /model: sashimi
+  - /dataset: ljspeech
+
+diffusion:
+  T: 50
+  beta_0: 0.0001
+  beta_T: 0.05
+  beta: null
+
+train:
+  batch_size_per_gpu: 2
+
+dataset: # Train on 2s samples with larger hop length
+  segment_length: 44000
+  sampling_rate: 22050
+  valid: false
+  filter_length: 1024
+  win_length: 1024
+  hop_length: 2048
+  mel_fmin: 0.0
+  mel_fmax: 8000.0
+
+generate:
+  mel_path: mel2048
+  mel_name: LJ001-0001
+
+model:
+  unconditional: false
+  mel_upsample: [32, 64] # Product should equal hop_length
