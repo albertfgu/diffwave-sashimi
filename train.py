@@ -51,7 +51,7 @@ def train(
     diffusion_cfg, model_cfg, dataset_cfg, generate_cfg, # dist_cfg, wandb_cfg, # train_cfg,
     ckpt_iter, n_iters, iters_per_ckpt, iters_per_logging,
     learning_rate, batch_size_per_gpu,
-    n_samples,
+    # n_samples,
     name=None,
     mel_path=None,
 ):
