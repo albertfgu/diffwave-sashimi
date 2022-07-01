@@ -13,11 +13,9 @@ train:
   batch_size_per_gpu: 4
 
 generate:
-  # mel_path: mel256
   mel_name: LJ001-0001
   n_samples: 2
 
 model:
-  d_model: 32
   unconditional: false
-  mel_upsample: [16, 16]
+  mel_upsample: [16, 16] # Product should equal hop size in the dataset config!

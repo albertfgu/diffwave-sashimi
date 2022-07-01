@@ -120,12 +120,19 @@ Generated samples will be stored in `exp/<run>/waveforms/<ckpt_iter>/`
 
 ## Vocoding
 
-First create spectrograms to condition on: `python mel2samp.py -f ../data/ljspeech/LJSpeech-1.1/wavs -c config_vocoder.json -o mel256` to put which creates spectrograms based on the arguments in the `dataset_config`. 
-Some notes:
-- The hop size affects how much upsampling is needed in the diffusion upsampling. The parameter `mel_upsample` controls this; the product of the upsample sizes should equal the hop size.
-- Note that these spectrograms are only used for inference/generation. With a small tweak it should be possible to generate them on the fly to avoid this hassle of creating spectrograms separately
+- After downloading the data, make the config's `dataset.data_path` point to the `.wav` files
+- Toggle `model.unconditional=false`
+- Pass in the name of a `.wav` file for generation, e.g. `generate.mel_name=LJ001-0001`. Every checkpoint, vocoded samples for this audio file will be logged to wandb
 
-Run the same training script, with the additional command argument pointing to the spectrogramfolder, e.g. `python distributed_train.py -c config_vocoder_baseline.json --mel_path mel256`
+This is a full vocoding example command; see `configs/experiment/ljspeech.yaml` for details
+```
+python train.py experiment=ljspeech model=sashimi
+```
+
+Another example with a smaller WaveNet backbone, similar to the results from the DiffWave paper:
+```
+python train.py experiment=ljspeech model=wavenet model.res_channels=64 model.skip_channels=64
+```
 
 ### Pre-processed Spectrograms
 
@@ -170,15 +177,15 @@ Resume training: `python train.py model=sashimi train.ckpt_iter=max train.learni
 (as described in the paper, this model used a manual learning rate decay after 500k steps)
 
 Generation examples:
-`python generate.py model=sashimi` (Best model)
-`python generate.py model=sashimi generate.ckpt_iter=500000` (Earlier model)
+`python generate.py experiment=sc09 model=sashimi` (Latest model at 800k steps)
+`python generate.py experiment=sc09 model=sashimi generate.ckpt_iter=500000` (Earlier model at 500k steps)
 
 `python generate.py generate.n_samples=256 generate.batch_size=128` (Generate 2048 total samples with largest batch that fits on an A100; used for evaluation metrics in the paper)
 
 ### SaShiMi+DiffWave small
 Experiment folder: `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
-Train: `python train.py model=sashimi model.d_model=64 train.batch_size_per_gpu=4 train.n_samples=32` (since generation is faster, you can increase the logged samples per epoch)
-Generate: `python generate.py model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256`
+Train: `python train.py experiment=sc09 model=sashimi model.d_model=64 train.batch_size_per_gpu=4 generate.n_samples=32` (since generation is faster, you can increase the logged samples per epoch)
+Generate: `python generate.py experiment=sc09 model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256`
 
 ## WaveNet
 
@@ -205,9 +212,9 @@ I don't remember if I changed anything in the code to cause this; perhaps it cou
 
 ### (WaveNet)+DiffWave small
 Experiment folder: `exp/wnet_h128_d30_T200_betaT0.02_uncond/`
-Train: `python train.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10 train.batch_size_per_gpu=4 train.n_samples=32`
+Train: `python train.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10 train.batch_size_per_gpu=4 generate.n_samples=32`
 A shorthand model config is also defined:
-`python train.py model=wavenet_small train.batch_size_per_gpu=4 train.n_samples=32`
+`python train.py model=wavenet_small train.batch_size_per_gpu=4 generate.n_samples=32`
 
 
 ### Conditional

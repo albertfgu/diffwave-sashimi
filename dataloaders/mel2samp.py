@@ -134,7 +134,7 @@ def main(cfg: DictConfig) -> None:
     #     data = f.read()
     # data_config = json.loads(data)["validset_config"]
     # data_config = json.loads(data)["dataset_config"]
-    cfg.dataset.pop("name")
+    cfg.dataset.pop("_name_")
     mel2samp = Mel2Samp(**cfg.dataset)
 
     filepaths = files_to_list(cfg.dataset.data_path)

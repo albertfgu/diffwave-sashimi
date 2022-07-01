@@ -3,7 +3,6 @@ defaults:
   - experiment: sc09
 
 train: # Not used in generate.py
-  # stdout_dir: exp/ # directory to save stdout logs
   name: null # Name of experiment (prefix of experiment name)
   ckpt_iter: max
   iters_per_ckpt: 10000
@@ -11,11 +10,8 @@ train: # Not used in generate.py
   n_iters: 1000001
   learning_rate: 2e-4
   batch_size_per_gpu: 4
-  # n_samples: 16 # Samples per GPU to generate per checkpoint
-  # mel_path: null # Path to load spectrograms from for vocoding
 
 generate:
-  # name: null # Name of experiment (prefix of experiment name)
   ckpt_iter: max # Which checkpoint to use; assign a number or "max". Is ignored when sampling during training
   ckpt_smooth: null # Which checkpoint to start averaging from (experimental feature, can ignore)
   n_samples: 16 # Number of utterances to be generated (per GPU)

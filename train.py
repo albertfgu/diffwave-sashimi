@@ -53,7 +53,7 @@ def train(
     learning_rate, batch_size_per_gpu,
     # n_samples,
     name=None,
-    mel_path=None,
+    # mel_path=None,
 ):
     """
     Parameters:
@@ -167,7 +167,7 @@ def train(
                 # else:
                 #     assert mel_path is not None
                 #     mel_name=generate_cfg.mel_name # "LJ001-0001"
-                if not model_cfg["unconditional"]: assert mel_name is not None
+                if not model_cfg["unconditional"]: assert generate_cfg.mel_name is not None
                 generate_cfg["ckpt_iter"] = n_iter
                 samples = generate(
                     rank, # n_iter,
