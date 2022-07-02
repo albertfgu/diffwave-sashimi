@@ -315,6 +315,17 @@ class Sashimi(nn.Module):
     def __repr__(self):
         return f"sashimi_h{self.d_model}_d{self.n_layers}_pool{''.join(self.pool)}_expand{self.expand}_ff{self.ff}_{'uncond' if self.unconditional else 'cond'}"
 
+    @classmethod
+    def name(cls, cfg):
+        return "{}_d{}_n{}_pool_{}_expand{}_ff{}".format(
+            "unet" if cfg["unet"] else "snet",
+            cfg["d_model"],
+            cfg["n_layers"],
+            len(cfg["pool"]),
+            cfg["expand"],
+            cfg["ff"],
+        )
+
 if __name__ == '__main__':
     model = Sashimi(n_layers=2).cuda()
     # Print parameter count

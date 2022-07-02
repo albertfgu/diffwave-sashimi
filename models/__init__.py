@@ -14,3 +14,10 @@ def construct_model(model_cfg):
     #     return WaveNet(**model_cfg)
     # elif model_cfg.backbone == ["sashimi"]:
     #     return Sashimi(**model_cfg)
+
+def model_identifier(model_cfg):
+    model_cls = {
+        "wavenet": WaveNet,
+        "sashimi": Sashimi,
+    }[model_cfg._name_]
+    return model_cls.name(model_cfg)

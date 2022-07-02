@@ -2,6 +2,8 @@ import os
 import numpy as np
 import torch
 
+from models import model_identifier
+
 def flatten(v):
     """
     Flatten a list of lists/tuples
@@ -96,26 +98,7 @@ def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_director
     # ckpt_path = output_directory # train_cfg['output_directory']
 
     # generate experiment (local) path
-    # TODO should be controlled by each model class instead of a central controller like this
-    if model_cfg["_name_"] == "sashimi":
-        model_name = "{}_d{}_n{}_pool_{}_expand{}_ff{}".format(
-            "unet" if model_cfg["unet"] else "snet",
-            model_cfg["d_model"],
-            model_cfg["n_layers"],
-            len(model_cfg["pool"]),
-            model_cfg["expand"],
-            model_cfg["ff"],
-            # model_cfg["channels"],
-            # diffusion_cfg["T"],
-            # diffusion_cfg["beta_T"],
-        )
-    else:
-        model_name = "wnet_h{}_d{}".format(
-            model_cfg["res_channels"],
-            model_cfg["num_res_layers"],
-            # diffusion_cfg["T"],
-            # diffusion_cfg["beta_T"],
-        )
+    model_name = model_identifier(model_cfg)
     diffusion_name = f"_T{diffusion_cfg['T']}_betaT{diffusion_cfg['beta_T']}"
     if model_cfg["unconditional"]:
         data_name = ""
