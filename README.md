@@ -143,7 +143,7 @@ Generated samples will be stored in `exp/<run>/waveforms/<generate.ckpt_iter>/`
 - Toggle `model.unconditional=false`
 - Pass in the name of a `.wav` file for generation, e.g. `generate.mel_name=LJ001-0001`. Every checkpoint, vocoded samples for this audio file will be logged to wandb
 
-This is an example command for LJSpeech vocoding; see the config `configs/experiment/ljspeech.yaml` for details
+This is an example command for LJSpeech vocoding with a smaller SaShiMi model. See the config `configs/experiment/ljspeech.yaml` for details. A checkpoint for this model at 200k steps is also provided.
 ```
 python train.py experiment=ljspeech model=sashimi model.d_model=32 wandb.mode=online
 ```
