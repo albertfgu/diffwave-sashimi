@@ -123,7 +123,7 @@ class DiffWaveBlock(nn.Module):
         # the layer-specific fc for diffusion step embedding
         self.fc_t = nn.Linear(diffusion_step_embed_dim_out, self.d_model)
 
-        self.layer = S4(d_model, L, bidirectional=True)
+        self.layer = S4(d_model, l_max=L, bidirectional=True)
         self.ff = FF(d_model, ff)
 
         self.norm1 = TransposedLN(d_model)
@@ -154,7 +154,7 @@ class DiffWaveBlock(nn.Module):
 
         # y = self.norm1(y)
         # dilated conv layer
-        y = self.layer(y)
+        y, _ = self.layer(y)
 
         # add mel spectrogram as (local) conditioner
         if mel_spec is not None:
