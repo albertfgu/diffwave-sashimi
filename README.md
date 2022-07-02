@@ -96,19 +96,19 @@ The parameters `res_channels`, `skip_channels`, `num_res_layers`, and `dilation_
 
 The SaShiMi backbone is used by setting `model._name_=sashimi`.
 The parameters are:
-```
-unet: If true, use S4 layers in both the downsample and upsample parts of the backbone. If false, use S4 layers in only the upsample part.
-d_model: Starting model dimension of outermost stage
-n_layers: Number of layers per stage
-pool: List of pooling factors per stage (e.g. [4, 4] means three total stages, pooling by a factor of 4 in between each)
-expand: Multiplicative factor to increase model dimension between stages
-ff: Width of inner layer of MLP (i.e. MLP block has dimensions d_model -> d_model*ff -> d_model)
+```yaml
+unet:     # If true, use S4 layers in both the downsample and upsample parts of the backbone. If false, use S4 layers in only the upsample part.
+d_model:  # Starting model dimension of outermost stage
+n_layers: # Number of layers per stage
+pool:     # List of pooling factors per stage (e.g. [4, 4] means three total stages, pooling by a factor of 4 in between each)
+expand:   # Multiplicative factor to increase model dimension between stages
+ff:       # Width of inner layer of MLP (i.e. MLP block has dimensions d_model -> d_model*ff -> d_model)
 ```
 
 ## Training
 
 Experiments are saved under `exp/<run>` with an automatically generated run name identifying the experiment (model and setting).
-Checkpoints are inside `exp/<run>/checkpoint` and generated audio samples in `exp/<name>/waveforms`.
+Checkpoints are saved to `exp/<run>/checkpoint/` and generated audio samples to `exp/<run>/waveforms/`.
 
 ### Logging
 Set `wandb.mode=online` to turn on WandB logging, or `wandb.mode=disabled` to turn it off.
@@ -123,11 +123,7 @@ Use `wandb.id=<id>` to resume logging to a previous run.
 
 ### Generating
 
-After training with `python train.py <flags>`,
-```
-python generate.py <flags>
-```
-generates samples according to the `generate` dictionary of the config.
+After training with `python train.py <flags>`, `python generate.py <flags>` generates samples according to the `generate` dictionary of the config.
 
 For example,
 ```
@@ -164,22 +160,23 @@ Other DiffWave vocoder implementations such as https://github.com/philsyn/DiffWa
 Our implementation does not require this step, which we find more convenient.
 However, pre-processing and saving the spectrograms is still possible.
 
-To pre-generate a folder of spectrograms according to the `dataset` config, run the `mel2samp` script and specify an output directory:
+To generate a folder of spectrograms according to the `dataset` config, run the `mel2samp` script and specify an output directory (here 256 refers to the hop size):
 ```
 python -m dataloaders.mel2samp experiment=ljspeech +output_dir=mel256
 ```
-(Here 256 refers to the hop size, but you can use any folder name.)
 
 Then during training or generation, add in the additional flag `generate.mel_path=mel256` to use the pre-processed spectrograms, e.g.
 ```
-python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.mel_name=LJ001-0002 generate.mel_path=mel256 
+python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.mel_name=LJ001-0002 generate.mel_path=mel256
 ```
 
 
 # Pretrained Models
 
 The branch `git checkout checkpoints` is provided for the code used in the checkpoints.
+
 **This branch is meant only for reproducing generated samples from the SaShiMi paper from ICML 2022 - please do not attempt train-from-scratch results from this code.**
+
 Both SaShiMi and WaveNet backbones have issues that are explained below.
 
 ### Checkpoints
@@ -190,8 +187,8 @@ Install [Git LFS](https://git-lfs.github.com/) and `git lfs pull` to download th
 For each of the provided checkpoints, 16 audio samples are provided.
 
 More pre-generated samples for all models from the SaShiMi paper can be downloaded from: https://huggingface.co/krandiash/sashimi-release/tree/main/samples/sc09
-The below four models correspond to "sashimi-diffwave", "sashimi-diffwave-small", "diffwave", and "diffwave-small" respectively.
 
+The below four models correspond to "sashimi-diffwave", "sashimi-diffwave-small", "diffwave", and "diffwave-small" respectively.
 Command lines are also provided to reproduce these samples (up to random seed).
 
 
@@ -201,29 +198,37 @@ The version of S4 used in these experiments is an outdated version of S4 from Ja
 
 ### DiffWave+SaShiMi
 
-Experiment folder: `exp/unet_d128_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
-Train from scratch: `python train.py model=sashimi train.ckpt_iter=-1`
-Resume training: `python train.py model=sashimi train.ckpt_iter=max train.learning_rate=1e-4`
+- Experiment folder: `exp/unet_d128_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
+- Train from scratch: `python train.py model=sashimi train.ckpt_iter=-1`
+- Resume training: `python train.py model=sashimi train.ckpt_iter=max train.learning_rate=1e-4`
 (as described in the paper, this model used a manual learning rate decay after 500k steps)
 
 Generation examples:
-`python generate.py experiment=sc09 model=sashimi` (Latest model at 800k steps)
-`python generate.py experiment=sc09 model=sashimi generate.ckpt_iter=500000` (Earlier model at 500k steps)
-
-`python generate.py generate.n_samples=256 generate.batch_size=128` (Generate 256\*\<num\_gpus\> total samples with largest batch that fits on an A100. The paper uses this command to generate 2048 samples on an 8xA100 machine for evaluation metrics.)
+- `python generate.py experiment=sc09 model=sashimi` (Latest model at 800k steps)
+- `python generate.py experiment=sc09 model=sashimi generate.ckpt_iter=500000` (Earlier model at 500k steps)
+- `python generate.py generate.n_samples=256 generate.batch_size=128` (Generate 256 samples per GPU with the largest batch that fits on an A100. The paper uses this command to generate 2048 samples on an 8xA100 machine for evaluation metrics.)
 
 ### DiffWave+SaShiMi small
+
 Experiment folder: `exp/unet_d64_n6_pool_2_expand2_ff2_T200_betaT0.02_uncond/`
-Train: `python train.py experiment=sc09 model=sashimi model.d_model=64 train.batch_size_per_gpu=4 generate.n_samples=32` (since the model is smaller, you can increase the batch size and logged samples per checkpoint)
-Generate: `python generate.py experiment=sc09 model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256`
+
+Train (since the model is smaller, you can increase the batch size and logged samples per checkpoint):
+```
+python train.py experiment=sc09 model=sashimi model.d_model=64 train.batch_size_per_gpu=4 generate.n_samples=32
+```
+
+Generate:
+```
+python generate.py experiment=sc09 model=sashimi model.d_model=64 generate.n_samples=256 generate.batch_size=256
+```
 
 ## WaveNet
 
 The WaveNet backbone provided in the parent fork had a [small](https://github.com/albertfgu/diffwave-sashimi/blob/checkpoints/models/wavenet.py#L92) [bug](https://github.com/albertfgu/diffwave-sashimi/blob/checkpoints/models/wavenet.py#L163) where it used `x += y` instead of `x = x + y`.
 This can cause a difficult-to-trace error in some PyTorch + environment combinations (but sometimes it works; I never figured out when it's ok).
-These two lines are fixed in the main branch of this repo.
+These two lines are fixed in the master branch of this repo.
 
-However, for some reason when models are *trained using the wrong version* and *loaded using the correct version*,
+However, for some reason when models are *trained using the wrong code* and *loaded using the correct code*,
 the model runs fine but produces inconsistent outputs, even in inference mode (i.e. generation produces static noise).
 So this branch for reproducing the checkpoints uses the incorrect version of these two lines.
 This allows generating from the model, but may not train in some environments.
@@ -231,20 +236,26 @@ This allows generating from the model, but may not train in some environments.
 
 
 ### DiffWave(+WaveNet)
-Experiment folder: `exp/wnet_h256_d36_T200_betaT0.02_uncond/`
-Usage: `python <train|generate>.py model=wavenet`
+- Experiment folder: `exp/wnet_h256_d36_T200_betaT0.02_uncond/`
+- Usage: `python <train|generate>.py model=wavenet`
 
-More Notes:
-The fully trained model (1000000 steps) is the original checkpoint from the original repo philsyn/DiffWave-unconditional
-The checkpoint at 500000 steps is our version trained from scratch.
-These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`.
-I don't remember if I changed anything in the code to cause this; perhaps it could also be differences in PyTorch or versions or environments?
+More notes:
+- The fully trained model (1000000 steps) is the original checkpoint from the original repo philsyn/DiffWave-unconditional
+- The checkpoint at 500000 steps is our version trained from scratch.
+- These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`.
+- I don't remember if I changed anything in the code to cause this; perhaps it could also be differences in PyTorch or versions or environments?
 
 ### DiffWave(+WaveNet) small
 Experiment folder: `exp/wnet_h128_d30_T200_betaT0.02_uncond/`
-Train: `python train.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10 train.batch_size_per_gpu=4 generate.n_samples=32`
-A shorthand model config is also defined:
-`python train.py model=wavenet_small train.batch_size_per_gpu=4 generate.n_samples=32`
+
+Train:
+```
+python train.py model=wavenet model.res_channels=128 model.num_res_layers=30 model.dilation_cycle=10 train.batch_size_per_gpu=4 generate.n_samples=32
+```
+A shorthand model config is also defined
+```
+python train.py model=wavenet_small train.batch_size_per_gpu=4 generate.n_samples=32
+```
 
 
 ## Vocoders
