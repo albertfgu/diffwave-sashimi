@@ -108,11 +108,11 @@ def train(
 
             print('Successfully loaded model at iteration {}'.format(ckpt_iter))
         except:
+            print(f"Model checkpoint found at iteration {ckpt_iter}, but was not successfully loaded - training from scratch.")
             ckpt_iter = -1
-            print('No valid checkpoint model found, start training from initialization.')
     else:
+        print('No valid checkpoint model found - training from scratch.')
         ckpt_iter = -1
-        print('No valid checkpoint model found, start training from initialization.')
 
     # training
     n_iter = ckpt_iter + 1
