@@ -25,7 +25,7 @@ distributed:
 
 wandb:
   mode: disabled # Pass in 'wandb.mode=online' to turn on wandb logging
-  project: hippo
+  project: sashimi
   entity: null
   id: null # Set to string to resume logging from run
   job_type: training
