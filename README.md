@@ -7,8 +7,8 @@ For this reason it is not an official GitHub fork.
 
 ## Overview
 
-This repository aims to provide a flexible and modular implementation of the DiffWave audio diffusion model.
-The `checkpoints` branch of this repository has the original code used for reproducing experiments from the SaShiMi paper ([instructions](#pretrained-models)]).
+This repository aims to provide a clean implementation of the DiffWave audio diffusion model.
+The `checkpoints` branch of this repository has the original code used for reproducing experiments from the SaShiMi paper ([instructions](#pretrained-models)).
 The `master` branch of this repository has the latest versions of the S4/SaShiMi model and can be used to train new models from scratch.
 
 
@@ -27,7 +27,7 @@ PRs are very welcome!
 - Mixed-precision training
 - Fast inference procedure from later versions of the DiffWave paper
 - Can add an option to allow original Tensorboard logging instead of WandB (code is still there, just commented out)
-- The different backbones (WaveNet and SaShiMi) can be consolidated more cleanly with the diffusion portions factored out
+- The different backbones (WaveNet and SaShiMi) can be consolidated more cleanly with the diffusion logic factored out
 
 ## ToC
 
@@ -49,20 +49,20 @@ This default config is for SC09 unconditional generation with the SaShiMi backbo
 Configuration is managed by [Hydra](https://hydra.cc).
 Config files are under `configs/`.
 Examples of different configs and running experiments via command line are provided throughout this README.
-Hydra has a steeper learning curve than standard `argparse`-based workflows, but offers much more flexibility and better experiment management. Feel free to file Issues for help with configs.
+Hydra has a steeper learning curve than standard `argparse`-based workflows, but offers much more flexibility and better experiment management. Feel free to file issues for help with configs.
 
 ### Multi-GPU training
 By default, all available GPUs are used (according to [`torch.cuda.device_count()`](https://pytorch.org/docs/stable/cuda.html#torch.cuda.device_count)).
-You can specify which GPUs to use by setting the [`CUDA_DEVICES_AVAILABLE`](https://developer.nvidia.com/blog/cuda-pro-tip-control-gpu-visibility-cuda_visible_devices/) environment variable before running the training module, or `CUDA_VISIBLE_DEVICES=0,1 python train.py`.
+You can specify which GPUs to use by setting the [`CUDA_DEVICES_AVAILABLE`](https://developer.nvidia.com/blog/cuda-pro-tip-control-gpu-visibility-cuda_visible_devices/) environment variable before running the training module, or e.g. `CUDA_VISIBLE_DEVICES=0,1 python train.py`.
 
 
 ## Data
 
 Unconditional generation uses the SC09 dataset by default, while vocoding uses [LJSpeech](https://keithito.com/LJ-Speech-Dataset/).
-The entry `dataset_config.data_path` of the config should point to the desired folder, e.g. `data/sc09` or `data/LJSpeech-1.1/wavs`.
+The entry `dataset_config.data_path` of the config should point to the desired folder, e.g. `data/sc09` or `data/LJSpeech-1.1/wavs`
 
 ### SC09
-For SC09, extract the Speech Commands dataset and move the digits subclasses into a separate folder, e.g. `./data/sc09/{zero,one,two,three,four,five,six,seven,eight,nine}`.
+For SC09, extract the Speech Commands dataset and move the digits subclasses into a separate folder, e.g. `./data/sc09/{zero,one,two,three,four,five,six,seven,eight,nine}`
 
 ### LJSpeech
 
@@ -72,7 +72,7 @@ mkdir data && cd data
 wget https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2
 tar xvf LJSpeech-1.1.tar.bz2
 ```
-The waveforms should be organized in the folder `./data/LJSpeech-1.1/wavs`.
+The waveforms should be organized in the folder `./data/LJSpeech-1.1/wavs`
 
 
 ## Models
@@ -84,7 +84,7 @@ The model configuration is controlled by the dictionary `model` inside the confi
 
 The flags `in_channels` and `out_channels` control the data dimension.
 The three flags `diffusion_step_embed_dim_{in,mid,out}` control DiffWave parameters for the diffusion step embedding.
-The flag `unconditional` determines whether to do unconditional or conditional generation (using dataset SC09 and LibreSpeech respectively).
+The flag `unconditional` determines whether to do unconditional or conditional generation.
 These flags are common to both backbones.
 
 ### WaveNet
@@ -102,7 +102,7 @@ d_model:  # Starting model dimension of outermost stage
 n_layers: # Number of layers per stage
 pool:     # List of pooling factors per stage (e.g. [4, 4] means three total stages, pooling by a factor of 4 in between each)
 expand:   # Multiplicative factor to increase model dimension between stages
-ff:       # Width of inner layer of MLP (i.e. MLP block has dimensions d_model -> d_model*ff -> d_model)
+ff:       # Feedforward expansion factor: MLP block has dimensions d_model -> d_model*ff -> d_model)
 ```
 
 ## Training
@@ -116,8 +116,8 @@ Standard wandb arguments such as entity and project are configurable.
 
 ### Resuming
 
-To resume from the checkpoint `exp/<run>/checkpoint/1000.pkl`, simply re-run the same training command with the additional flag `train.ckpt_iter=1000` .
-`train_config.ckpt_iter=max` resumes from the last checkpoint, and `train_config.ckpt_iter=-1` trains from scratch.
+To resume from the checkpoint `exp/<run>/checkpoint/1000.pkl`, simply re-run the same training command with the additional flag `train.ckpt_iter=1000`.
+Passing in `train_config.ckpt_iter=max` resumes from the last checkpoint, and `train_config.ckpt_iter=-1` trains from scratch.
 
 Use `wandb.id=<id>` to resume logging to a previous run.
 
@@ -127,9 +127,9 @@ After training with `python train.py <flags>`, `python generate.py <flags>` gene
 
 For example,
 ```
-python generate.py <flags> generate.ckpt_iter=500000 generate.n_samples=2048 generate.batch_size=128
+python generate.py <flags> generate.ckpt_iter=500000 generate.n_samples=256 generate.batch_size=128
 ```
-generates 2048 total samples at a batch size of 128 per GPU from the model specified in the config at checkpoint iteration 500000.
+generates 256 samples per GPU, at a batch size of 128 per GPU, from the model specified in the config at checkpoint iteration 500000.
 
 Generated samples will be stored in `exp/<run>/waveforms/<generate.ckpt_iter>/`
 
@@ -139,7 +139,8 @@ Generated samples will be stored in `exp/<run>/waveforms/<generate.ckpt_iter>/`
 - Toggle `model.unconditional=false`
 - Pass in the name of a `.wav` file for generation, e.g. `generate.mel_name=LJ001-0001`. Every checkpoint, vocoded samples for this audio file will be logged to wandb
 
-This is an example command for LJSpeech vocoding with a smaller SaShiMi model. See the config `configs/experiment/ljspeech.yaml` for details. A checkpoint for this model at 200k steps is also provided.
+Currently, vocoding is only set up for the LJSpeech dataset. See the config `configs/experiment/ljspeech.yaml` for details.
+The following is an example command for LJSpeech vocoding with a smaller SaShiMi model. A checkpoint for this model at 200k steps is also provided.
 ```
 python train.py experiment=ljspeech model=sashimi model.d_model=32 wandb.mode=online
 ```
@@ -157,10 +158,10 @@ python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.m
 ### Pre-processed Spectrograms
 
 Other DiffWave vocoder implementations such as https://github.com/philsyn/DiffWave-Vocoder and https://github.com/lmnt-com/diffwave require first generating spectrograms in a separate pre-processing step.
-Our implementation does not require this step, which we find more convenient.
+This implementation does not require this step, which we find more convenient.
 However, pre-processing and saving the spectrograms is still possible.
 
-To generate a folder of spectrograms according to the `dataset` config, run the `mel2samp` script and specify an output directory (here 256 refers to the hop size):
+To generate a folder of spectrograms according to the `dataset` config, run the `mel2samp` script and specify an output directory (e.g. here 256 refers to the hop size):
 ```
 python -m dataloaders.mel2samp experiment=ljspeech +output_dir=mel256
 ```
@@ -231,8 +232,8 @@ These two lines are fixed in the master branch of this repo.
 However, for some reason when models are *trained using the wrong code* and *loaded using the correct code*,
 the model runs fine but produces inconsistent outputs, even in inference mode (i.e. generation produces static noise).
 So this branch for reproducing the checkpoints uses the incorrect version of these two lines.
-This allows generating from the model, but may not train in some environments.
-**If anyone knows why this happens, I would love to know! Shoot me an email or file an Issue!**
+This allows generating from the pre-trained models, but may not train in some environments.
+**If anyone knows why this happens, I would love to know! Shoot me an email or file an issue!**
 
 
 ### DiffWave(+WaveNet)
@@ -241,8 +242,8 @@ This allows generating from the model, but may not train in some environments.
 
 More notes:
 - The fully trained model (1000000 steps) is the original checkpoint from the original repo philsyn/DiffWave-unconditional
-- The checkpoint at 500000 steps is our version trained from scratch.
-- These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`.
+- The checkpoint at 500000 steps is our version trained from scratch
+- These should both be compatible with this codebase (e.g. generation works with both), but for some reason the original `checkpoint/1000000.pkl` file is much smaller than our `checkpoint/500000.pkl`
 - I don't remember if I changed anything in the code to cause this; perhaps it could also be differences in PyTorch or versions or environments?
 
 ### DiffWave(+WaveNet) small
