@@ -107,6 +107,8 @@ ff:       # Feedforward expansion factor: MLP block has dimensions d_model -> d_
 
 ## Training
 
+A basic experiment can be run with `python train.py`, which defaults to `python train.py experiment=sc09` (SC09 unconditional waveform synthesis).
+
 Experiments are saved under `exp/<run>` with an automatically generated run name identifying the experiment (model and setting).
 Checkpoints are saved to `exp/<run>/checkpoint/` and generated audio samples to `exp/<run>/waveforms/`.
 
@@ -174,11 +176,14 @@ python generate.py experiment=ljspeech model=sashimi model.d_model=32 generate.m
 
 # Pretrained Models
 
-The branch `git checkout checkpoints` is provided for the code used in the checkpoints.
+The remainder of this README pertains only to pre-trained models from the SaShiMi paper.
+
+The branch `git checkout checkpoints` provides checkpoints for these models.
 
 **This branch is meant only for reproducing generated samples from the SaShiMi paper from ICML 2022 - please do not attempt train-from-scratch results from this code.**
+The older models in this branch have issues that are explained below.
 
-Both SaShiMi and WaveNet backbones have issues that are explained below.
+Training from scratch is covered in the previous part of this README and should be done from the `master` branch.
 
 ### Checkpoints
 
@@ -195,7 +200,7 @@ Command lines are also provided to reproduce these samples (up to random seed).
 
 ## SaShiMi
 
-The version of S4 used in these experiments is an outdated version of S4 from January 2022 that predates V2 (February 2022) of the [S4 repository](https://github.com/HazyResearch/state-spaces). S4 is currently on V3 as of July 2022.
+The version of S4 used in the experiments in the SaShiMi paper is an outdated version of S4 from January 2022 that predates V2 (February 2022) of the [S4 repository](https://github.com/HazyResearch/state-spaces). S4 is currently on V3 as of July 2022.
 
 ### DiffWave+SaShiMi
 
