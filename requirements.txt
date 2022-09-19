@@ -10,4 +10,4 @@ numpy
 scipy
 omegaconf
 librosa
-hydra
+hydra-core
