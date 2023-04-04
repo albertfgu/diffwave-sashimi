@@ -275,7 +275,15 @@ class Sashimi(nn.Module):
                                         ZeroConv1d(d_model, out_channels))
 
     def forward(self, input_data, mel_spec=None):
-        audio, diffusion_steps = input_data
+        if isinstance(input_data, tuple):
+            audio, diffusion_steps = input_data
+            #print(diffusion_steps, type(diffusion_steps))
+        else:
+            print("WARNING: sashimi input_data is not a tuple!")
+            audio = input_data
+            #diffusion_steps = audio[:,0,0].clone().int().detach().unsqueeze(0) * 0
+            diffusion_steps = torch.ones(audio.size(0), 1).int().to(audio.device)
+
 
         x = audio
         x = self.init_conv(x)

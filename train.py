@@ -13,6 +13,7 @@ import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
+from torchview import draw_graph
 
 # from dataset_sc import load_Speech_commands
 # from dataset_ljspeech import load_LJSpeech
@@ -80,8 +81,27 @@ def train(
     print('Data loaded')
 
     # predefine model
-    net = construct_model(model_cfg).cuda()
+    net = construct_model(model_cfg)
     print_size(net, verbose=False)
+
+    input_size = (1, model_cfg.in_channels, dataset_cfg.segment_length)
+    # Depth 2?
+    model_graph = draw_graph(
+        net,
+        input_size=input_size,
+        # # Graph left-to-right: https://github.com/mert-kurttutan/torchview/issues/56
+        graph_dir="LR",
+        depth=1,
+        # depth=2,
+        roll=True,
+        expand_nested=True,
+        save_graph=True,
+        # directory=tempdir,
+        ## Doesn't use any memory
+        # device="meta",
+    )
+    return
+
 
     # apply gradient all reduce
     if num_gpus > 1:
@@ -122,12 +142,12 @@ def train(
             if model_cfg["unconditional"]:
                 audio, _, _ = data
                 # load audio
-                audio = audio.cuda()
+                audio = audio
                 mel_spectrogram = None
             else:
                 mel_spectrogram, audio = data
-                mel_spectrogram = mel_spectrogram.cuda()
-                audio = audio.cuda()
+                mel_spectrogram = mel_spectrogram
+                audio = audio
 
             # back-propagation
             optimizer.zero_grad()
@@ -215,8 +235,8 @@ def training_loss(net, loss_fn, audio, diffusion_hyperparams, mel_spec=None):
 
     # audio = X
     B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
-    diffusion_steps = torch.randint(T, size=(B,1,1)).cuda()  # randomly sample diffusion steps from 1~T
-    z = torch.normal(0, 1, size=audio.shape).cuda()
+    diffusion_steps = torch.randint(T, size=(B,1,1))  # randomly sample diffusion steps from 1~T
+    z = torch.normal(0, 1, size=audio.shape)
     transformed_X = torch.sqrt(Alpha_bar[diffusion_steps]) * audio + torch.sqrt(1-Alpha_bar[diffusion_steps]) * z  # compute x_t from q(x_t|x_0)
     epsilon_theta = net((transformed_X, diffusion_steps.view(B,1),), mel_spec=mel_spec)  # predict \epsilon according to \epsilon_\theta
     return loss_fn(epsilon_theta, z)

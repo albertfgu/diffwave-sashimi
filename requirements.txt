@@ -11,3 +11,6 @@ scipy
 omegaconf
 librosa
 hydra-core
+
+torchview
+graphviz
