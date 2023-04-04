@@ -11,6 +11,7 @@ scipy
 omegaconf
 librosa
 hydra-core
+torchaudio==0.13.1
 
 torchview
 graphviz
