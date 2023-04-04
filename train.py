@@ -228,9 +228,7 @@ def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     OmegaConf.set_struct(cfg, False)  # Allow writing keys
 
-    if not os.path.isdir("exp/"):
-        os.makedirs("exp/")
-        os.chmod("exp/", 0o775)
+    os.makedirs("exp/", mode=0o775, exist_ok=True)
 
     num_gpus = torch.cuda.device_count()
     train_fn = partial(

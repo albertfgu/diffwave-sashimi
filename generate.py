@@ -117,9 +117,7 @@ def generate(
     # Add checkpoint number to output directory
     output_directory = os.path.join(output_directory, str(ckpt_iter))
     if rank == 0:
-        if not os.path.isdir(output_directory):
-            os.makedirs(output_directory)
-            os.chmod(output_directory, 0o775)
+        os.makedirs(output_directory, mode=0o775, exist_ok=True)
         print("saving to output directory", output_directory)
 
     if batch_size is None:

@@ -111,9 +111,7 @@ def local_directory(name, model_cfg, diffusion_cfg, dataset_cfg, output_director
 
     # Get shared output_directory ready
     output_directory = os.path.join('exp', local_path, output_directory)
-    if not os.path.isdir(output_directory):
-        os.makedirs(output_directory)
-        os.chmod(output_directory, 0o775)
+    os.makedirs(output_directory, mode=0o775, exist_ok=True)
     print("output directory", output_directory, flush=True)
     return local_path, output_directory
 

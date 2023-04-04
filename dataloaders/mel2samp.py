@@ -141,9 +141,7 @@ def main(cfg: DictConfig) -> None:
     filepaths = sorted(filepaths)
 
     # Make directory if it doesn't exist
-    if not os.path.isdir(cfg.output_dir):
-        os.makedirs(cfg.output_dir)
-        os.chmod(cfg.output_dir, 0o775)
+    os.makedirs(cfg.output_dir, mode=0o775, exist_ok=True)
 
     for filepath in tqdm(filepaths):
         audio, sr = load_wav_to_torch(filepath)
