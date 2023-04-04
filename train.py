@@ -82,7 +82,7 @@ def train(
     print('Data loaded')
 
     # predefine model
-    print(json.dumps(model_cfg))
+    print(json.dumps(OmegaConf.to_container(model_cfg)))
     net = construct_model(model_cfg)
     print_size(net, verbose=False)
 
