@@ -12,6 +12,7 @@ omegaconf
 librosa
 hydra-core
 torchaudio==0.13.1
+pytorch_lightning
 
 torchview
 graphviz

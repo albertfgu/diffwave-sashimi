@@ -1,5 +1,6 @@
 import os
 import time
+import json
 # import warnings
 # warnings.filterwarnings("ignore")
 from functools import partial
@@ -81,6 +82,7 @@ def train(
     print('Data loaded')
 
     # predefine model
+    print(json.dumps(model_cfg))
     net = construct_model(model_cfg)
     print_size(net, verbose=False)
 
